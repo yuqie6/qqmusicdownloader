@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/qqmusicdownloader/static/css/main.40cf2497.css",
+    "main.js": "/qqmusicdownloader/static/js/main.d158bed1.js",
+    "index.html": "/qqmusicdownloader/index.html",
+    "main.40cf2497.css.map": "/qqmusicdownloader/static/css/main.40cf2497.css.map",
+    "main.d158bed1.js.map": "/qqmusicdownloader/static/js/main.d158bed1.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.40cf2497.css",
+    "static/js/main.d158bed1.js"
+  ]
+}
