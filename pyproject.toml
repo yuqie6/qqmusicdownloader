@@ -2,16 +2,25 @@
 [tool.briefcase]
 project_name = "QQmusicDownloader"
 bundle = "com.yuqie.qqmusicdownloader"
-version = "0.0.1"
+version = "1.0.2"
 url = "https://example.com//qqmusic"
 license.file = "LICENSE"
-author = "Wu Qiaobin"
+author = "巫巧斌"
 author_email = "2140353088@qq.com"
 
 [tool.briefcase.app.qq_music_downloader]
 formal_name = "qq音乐下载器"
-description = "一款可以下载qq音乐里面的歌曲的软件"
-long_description = """More details about the app should go here.
+description = "一款便捷的QQ音乐歌曲下载工具，支持高品质音乐下载"
+long_description = """QQ音乐下载器是一款专注于音乐下载的桌面工具软件，具有以下特点：
+
+1. 简单易用：清晰的界面设计，操作直观
+2. 下载高效：支持异步下载，更快更稳定
+3. 多格式支持：可选择不同的格式（音质选择目前有bug，作者能力有限）
+4. 批量处理：支持多首歌曲同时下载（完善中）
+5. 使用该软件须有vip账号
+
+注意：本软件仅供个人学习研究使用，请勿用于商业用途。
+请遵守相关法律法规，尊重音乐版权。
 """
 sources = [
     "src/qq_music_downloader",

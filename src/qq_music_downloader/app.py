@@ -1,16 +1,13 @@
-# qq_music_api.py
-import aiohttp
-import json
-import logging
-import random
-from pathlib import Path
-import os
+# app.py
+import toga
+from toga.style import Pack
+from toga.style.pack import COLUMN, ROW
 import asyncio
-import aiofiles
-from typing import Dict, List, Optional, Tuple
-import base64
-import zlib
-import re
+import json
+import os
+from pathlib import Path
+import logging
+from .downloader import QQMusicDownloader
 
 # 配置日志记录
 logging.basicConfig(
@@ -19,264 +16,271 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class QQMusicAPI:
-    """QQ音乐API接口类，处理与QQ音乐服务器的所有交互"""
+class QQMusicDownloaderApp(toga.App):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.downloader = None
+        self.last_search_keyword = None
+        logger.info("应用程序初始化完成")
 
-    def __init__(self, cookie: str):
-        """初始化API客户端"""
-        self.cookie = self._clean_cookie(cookie)
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Cookie': self.cookie,
-            'Referer': 'https://y.qq.com',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Connection': 'keep-alive',
-            'Origin': 'https://y.qq.com'
-        }
-        self._setup_directories()
+    def save_cookie(self, widget):
+        """保存Cookie并初始化下载器"""
+        cookie = self.cookie_input.value
+        if not cookie:
+            self.main_window.info_dialog(
+                '提示',
+                '请先输入Cookie'
+            )
+            return
 
-    def _clean_cookie(self, cookie: str) -> str:
-        """清理Cookie中的特殊字符"""
-        # 替换特殊字符
-        cookie = cookie.replace('*', '%2A')
-        # 移除可能的多余空格
-        cookie = re.sub(r'\s+', '', cookie)
-        return cookie
+        logger.info("正在初始化下载器...")
+        self.downloader = QQMusicDownloader(cookie)
 
-    def _setup_directories(self):
-        """设置下载目录到系统下载文件夹"""
-        desktop_path = Path.home() / 'Desktop'
-        self.download_dir = desktop_path / 'QQMusic'
-        self.download_dir.mkdir(parents=True, exist_ok=True)
-        self.lyrics_dir = self.download_dir / 'lyrics'
-        self.lyrics_dir.mkdir(exist_ok=True)
-        logger.info(f"下载目录已设置为: {self.download_dir}")
+        # 更新下载路径显示
+        download_path = self.downloader.get_download_path()
+        self.path_label.text = f'下载路径：{download_path}'
+        logger.info(f"下载路径已设置: {download_path}")
 
-    def get_download_path(self) -> str:
-        """获取下载目录路径"""
-        return str(self.download_dir)
+        # 验证Cookie并提示用户
+        asyncio.create_task(self._validate_and_notify_cookie())
 
-    async def validate_cookie(self) -> bool:
-        """验证Cookie是否有效"""
+    async def _validate_and_notify_cookie(self):
+        """验证Cookie并通知用户结果"""
         try:
-            # 使用搜索接口验证Cookie
-            search_url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp'
-            params = {
-                'w': '周杰伦',  # 测试搜索
-                'p': 1,
-                'n': 1,
-                'format': 'json',
-                'inCharset': 'utf8',
-                'outCharset': 'utf-8'
-            }
+            if await self.downloader.validate_cookie():
+                logger.info("Cookie验证成功")
+                download_path = self.downloader.get_download_path()
+                await self.main_window.info_dialog(
+                    '成功',
+                    'Cookie验证成功！\n\n'
+                    f'文件将保存到：{download_path}\n\n'
+                    '现在可以开始搜索歌曲了！'
+                )
+                self.progress_label.text = 'Cookie验证成功，可以开始使用了！'
+            else:
+                logger.error("Cookie验证失败")
+                await self.main_window.error_dialog(
+                    '错误',
+                    'Cookie验证失败，请确保：\n\n'
+                    '1. 已在浏览器中登录QQ音乐\n'
+                    '2. Cookie复制完整\n'
+                    '3. Cookie未过期\n\n'
+                    '获取方法：\n'
+                    '1. 打开浏览器访问 y.qq.com\n'
+                    '2. 按F12打开开发者工具\n'
+                    '3. 在Network标签页中找到任意请求\n'
+                    '4. 在Headers中找到Cookie并复制完整内容'
+                )
+                self.progress_label.text = 'Cookie验证失败，请重试'
+        except Exception as e:
+            logger.error(f"Cookie验证过程出错: {e}")
+            await self.main_window.error_dialog(
+                '错误',
+                f'验证过程出错: {str(e)}'
+            )
 
-            response = await self._make_request(search_url, params)
-            logger.info(f"Cookie验证响应: {str(response)[:200]}...")
+    async def search_songs(self, widget):
+        """搜索歌曲并显示结果"""
+        if not self.downloader:
+            await self.main_window.info_dialog(
+                '提示',
+                '请先输入并保存Cookie'
+            )
+            return
 
-            if isinstance(response, dict):
-                if 'code' in response and response['code'] == 0:
-                    return True
-                if 'data' in response and 'song' in response['data']:
-                    return True
-            return False
+        keyword = self.search_input.value
+        if not keyword:
+            await self.main_window.info_dialog(
+                '提示',
+                '请输入搜索关键词'
+            )
+            return
+
+        self.last_search_keyword = keyword
+        logger.info(f"开始搜索: {keyword}")
+        self.progress_label.text = '正在搜索...'
+        self.progress_bar.value = 0
+
+        try:
+            songs = await self.downloader.search_and_show(
+                keyword,
+                self.main_window,
+                self._update_song_list
+            )
+
+            if songs:
+                self.progress_label.text = f'找到 {len(songs)} 首相关歌曲'
+            else:
+                self.progress_label.text = '未找到相关歌曲'
 
         except Exception as e:
-            logger.error(f"Cookie验证失败: {str(e)}")
-            return False
+            logger.error(f"搜索过程出错: {e}")
+            self.progress_label.text = '搜索失败'
+            await self.main_window.error_dialog(
+                '错误',
+                f'搜索失败: {str(e)}'
+            )
 
-    async def _make_request(self, url: str, params: Optional[Dict] = None) -> Dict:
-        """发送HTTP请求并处理响应"""
-        timeout = aiohttp.ClientTimeout(total=30)
+    def _update_song_list(self, songs):
+        """更新歌曲列表显示"""
+        self.results_table.data = [
+            (str(i+1), song['name'], song['singer'], song['album'])
+            for i, song in enumerate(songs)
+        ]
 
-        # 记录请求信息
-        logger.info(f"发送请求到: {url}")
-        logger.info(f"请求参数: {params}")
-        logger.info(f"Cookie长度: {len(self.cookie)}")
-
-        async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:
+    def on_table_select(self, widget, row=None, **kwargs):
+        """处理表格行选择事件"""
+        if row:
             try:
-                async with session.get(url, params=params) as response:
-                    response.raise_for_status()
-                    logger.info(f"响应状态码: {response.status}")
-
-                    text = await response.text()
-                    logger.debug(f"原始响应: {text[:200]}...")  # 只记录前200个字符
-
-                    # 处理JSONP响应
-                    if text.startswith(('callback(', 'MusicJsonCallback(', 'jsonCallback(')):
-                        text = text[text.find('(')+1:text.rfind(')')]
-
-                    result = json.loads(text)
-                    return result
-
+                selected_index = self.results_table.data.index(row)
+                if 0 <= selected_index < len(self.downloader.current_songs):
+                    selected_song = self.downloader.current_songs[selected_index]
+                    self.progress_label.text = f"已选择：{selected_song['name']} - {selected_song['singer']}"
+                    logger.info(f"已选择歌曲: {selected_song['name']}")
             except Exception as e:
-                logger.error(f"请求失败: {str(e)}")
-                raise
+                logger.error(f"选择处理出错: {e}")
 
-    async def search_song(self, keyword: str, page: int = 1, num: int = 20) -> List[Dict]:
-        """搜索歌曲"""
-        search_url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp'
-        params = {
-            'w': keyword,
-            'p': page,
-            'n': num,
-            'format': 'json',
-            'inCharset': 'utf8',
-            'outCharset': 'utf-8',
-            'platform': 'yqq.json'
-        }
+    async def download_selected(self, widget):
+        """下载选中的歌曲"""
+        if not self.results_table.selection:
+            await self.main_window.info_dialog(
+                '提示',
+                '请先选择要下载的歌曲'
+            )
+            return
 
         try:
-            response = await self._make_request(search_url, params)
-            if 'data' in response and 'song' in response['data']:
-                song_list = response['data']['song']['list']
-                return [
-                    {
-                        'name': song['songname'],
-                        'singer': ' & '.join(singer['name'] for singer in song['singer']),
-                        'album': song['albumname'],
-                        'duration': song['interval'],
-                        'songmid': song['songmid'],
-                        'albumid': song['albumid']
-                    }
-                    for song in song_list
-                ]
-            return []
+            selected_row = self.results_table.selection
+            selected_index = self.results_table.data.index(selected_row)
+
+            # 获取音质设置
+            quality_text = self.quality_selection.value
+            quality_map = {
+                '标准品质 (128kbps)': 1,
+                '高品质 (320kbps)': 2,
+                '无损品质 (FLAC)': 3
+            }
+            quality = quality_map.get(quality_text, 1)
+
+            # 开始下载
+            logger.info(f"开始下载，音质: {quality_text}")
+            success = await self.downloader.download_song(
+                selected_index,
+                quality,
+                self.main_window,
+                self.progress_bar,
+                self.progress_label
+            )
+
+            if success:
+                self.progress_bar.value = self.progress_bar.max
         except Exception as e:
-            logger.error(f"搜索失败: {e}")
-            return []
+            logger.error(f"下载过程出错: {e}")
+            await self.main_window.error_dialog(
+                '错误',
+                f'下载过程出错: {str(e)}'
+            )
+            self.progress_label.text = '下载失败'
 
-    async def get_song_url(self, songmid: str, quality: int = 1) -> Optional[str]:
-        """获取歌曲下载链接"""
-        guid = str(random.randint(1000000000, 9999999999))
-        vkey_url = 'https://u.y.qq.com/cgi-bin/musicu.fcg'
+    def startup(self):
+        """初始化应用程序界面"""
+        logger.info("开始初始化界面")
 
-        params = {
-            'format': 'json',
-            'data': json.dumps({
-                "req": {
-                    "module": "CDN.SrfCdnDispatchServer",
-                    "method": "GetCdnDispatch",
-                    "param": {"guid": guid, "calltype": 0, "userip": ""}
-                },
-                "req_0": {
-                    "module": "vkey.GetVkeyServer",
-                    "method": "CgiGetVkey",
-                    "param": {
-                        "guid": guid,
-                        "songmid": [songmid],
-                        "songtype": [0],
-                        "uin": "0",
-                        "loginflag": 1,
-                        "platform": "20"
-                    }
-                }
-            })
-        }
+        # 创建主容器
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=10))
 
-        try:
-            response = await self._make_request(vkey_url, params)
-            if response.get('req_0', {}).get('data', {}).get('midurlinfo'):
-                purl = response['req_0']['data']['midurlinfo'][0].get('purl', '')
-                if purl:
-                    return f"https://dl.stream.qqmusic.qq.com/{purl}"
-            logger.warning(f"无法获取下载链接: {songmid}")
-            return None
-        except Exception as e:
-            logger.error(f"获取下载链接失败: {e}")
-            return None
+        # 添加下载路径显示
+        path_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
+        self.path_label = toga.Label(
+            '下载路径将在登录后显示',
+            style=Pack(padding=(0, 5))
+        )
+        path_box.add(self.path_label)
 
-    async def get_lyrics(self, songmid: str) -> Optional[str]:
-        """获取歌词"""
-        lyrics_url = 'https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg'
-        params = {
-            'songmid': songmid,
-            'format': 'json',
-            'nobase64': 1,
-            'g_tk': '5381',
-            'loginUin': '0',
-            'hostUin': '0',
-            'inCharset': 'utf8',
-            'outCharset': 'utf-8',
-            'platform': 'yqq.json'
-        }
+        # 创建Cookie输入区域
+        cookie_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
+        self.cookie_input = toga.MultilineTextInput(
+            placeholder='请输入QQ音乐Cookie',
+            style=Pack(flex=1, height=60)
+        )
+        cookie_button = toga.Button(
+            '保存Cookie',
+            on_press=self.save_cookie,
+            style=Pack(padding=5)
+        )
+        cookie_box.add(self.cookie_input)
+        cookie_box.add(cookie_button)
 
-        try:
-            response = await self._make_request(lyrics_url, params)
-            if 'lyric' in response:
-                lyrics = response['lyric']
-                try:
-                    # 尝试base64解码
-                    lyrics = base64.b64decode(lyrics).decode('utf-8')
-                except:
-                    pass
-                return lyrics
-            return None
-        except Exception as e:
-            logger.error(f"获取歌词失败: {e}")
-            return None
+        # 创建搜索区域
+        search_box = toga.Box(style=Pack(direction=ROW, padding=5))
+        self.search_input = toga.TextInput(
+            placeholder='请输入歌曲名称',
+            style=Pack(flex=1)
+        )
+        search_button = toga.Button(
+            '搜索',
+            on_press=self.search_songs,
+            style=Pack(padding=5)
+        )
+        search_box.add(self.search_input)
+        search_box.add(search_button)
 
-    def _sanitize_filename(self, filename: str) -> str:
-        """清理文件名，移除非法字符"""
-        illegal_chars = '<>:"/\\|?*'
-        for char in illegal_chars:
-            filename = filename.replace(char, '_')
-        return filename
+        # 创建结果显示表格
+        self.results_table = toga.Table(
+            headings=['序号', '歌曲名', '歌手', '专辑'],
+            data=[],
+            style=Pack(flex=1, padding=5),
+            on_select=self.on_table_select
+        )
 
-    async def download_with_lyrics(self, url: str, filename: str, quality: int,
-                                 songmid: str, progress_bar=None,
-                                 progress_label=None) -> bool:
-        """下载歌曲和歌词"""
-        try:
-            ext = 'flac' if quality == 3 else 'm4a'
-            filename = self._sanitize_filename(filename)
-            file_path = self.download_dir / f"{filename}.{ext}"
+        # 创建进度显示区域
+        self.progress_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
+        self.progress_bar = toga.ProgressBar(style=Pack(flex=1))
+        self.progress_label = toga.Label(
+            '准备就绪',
+            style=Pack(padding=(0, 5))
+        )
+        self.progress_box.add(self.progress_bar)
+        self.progress_box.add(self.progress_label)
 
-            logger.info(f"开始下载: {filename}")
-            if progress_label:
-                progress_label.text = '准备下载...'
+        # 创建下载选项区域
+        quality_box = toga.Box(style=Pack(direction=ROW, padding=5))
+        quality_items = ['标准品质 (128kbps)', '高品质 (320kbps)', '无损品质 (FLAC)']
+        self.quality_selection = toga.Selection(
+            items=quality_items,
+            style=Pack(flex=1)
+        )
+        self.quality_selection.value = quality_items[0]
 
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(url) as response:
-                    response.raise_for_status()
-                    total_size = int(response.headers.get('content-length', 0))
+        download_button = toga.Button(
+            '下载选中歌曲',
+            on_press=self.download_selected,
+            style=Pack(padding=5)
+        )
+        quality_box.add(self.quality_selection)
+        quality_box.add(download_button)
 
-                    if progress_bar:
-                        progress_bar.max = 100  # 设置进度条最大值为100
-                        progress_bar.value = 0
+        # 添加所有组件到主容器
+        main_box.add(path_box)
+        main_box.add(cookie_box)
+        main_box.add(search_box)
+        main_box.add(self.results_table)
+        main_box.add(self.progress_box)
+        main_box.add(quality_box)
 
-                    chunk_size = 8192
-                    downloaded = 0
+        # 创建主窗口
+        self.main_window = toga.MainWindow(
+            title='QQ音乐下载器',
+            size=(800, 600)
+        )
+        self.main_window.content = main_box
+        self.main_window.show()
+        logger.info("界面初始化完成")
 
-                    async with aiofiles.open(file_path, mode='wb') as f:
-                        async for chunk in response.content.iter_chunked(chunk_size):
-                            await f.write(chunk)
-                            downloaded += len(chunk)
-                            if progress_bar and total_size > 0:
-                                # 计算百分比进度（0-100）
-                                progress_percentage = int((downloaded * 100) / total_size)
-                                progress_bar.value = progress_percentage
-                            if progress_label:
-                                progress_label.text = f'下载中... {downloaded * 100 / total_size:.1f}%'
+def main():
+    """应用程序入口点"""
+    return QQMusicDownloaderApp('QQ音乐下载器', 'org.example.qq_music_downloader')
 
-            # 下载歌词
-            if progress_label:
-                progress_label.text = '正在获取歌词...'
-
-            lyrics = await self.get_lyrics(songmid)
-            if lyrics:
-                lyrics_path = self.lyrics_dir / f"{filename}.lrc"
-                async with aiofiles.open(lyrics_path, 'w', encoding='utf-8') as f:
-                    await f.write(lyrics)
-                logger.info(f"歌词下载成功: {filename}")
-
-            if progress_label:
-                progress_label.text = '下载完成！'
-            return True
-
-        except Exception as e:
-            logger.error(f"下载失败 {filename}: {e}")
-            if progress_label:
-                progress_label.text = '下载失败！'
-            return False
+if __name__ == '__main__':
+    app = main()
+    app.main_loop()
