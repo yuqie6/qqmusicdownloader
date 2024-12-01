@@ -5,7 +5,7 @@ qq音乐下载器
 `The BeeWare Project`_. **If you want to see more tools like Briefcase, please
 consider** `becoming a financial member of BeeWare`_.
 
-一款可以下载qq音乐里面的歌曲的软件（目前只支持qq音乐）
+一款可以下载qq音乐里面的歌曲的软件（目前只支持qq音乐），需要有qq音乐的vip账号获取cookie
 
 .. _`Briefcase`: https://briefcase.readthedocs.io/
 .. _`The BeeWare Project`: https://beeware.org/
