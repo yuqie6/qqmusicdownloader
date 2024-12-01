@@ -3,15 +3,15 @@
 project_name = "QQmusicDownloader"
 bundle = "com.yuqie.qqmusicdownloader"
 version = "1.0.2"
-url = "https://example.com//qqmusic"
+url = "https://yuqie6.github.io/qqmusicdownloader"
 license.file = "LICENSE"
 author = "巫巧斌"
 author_email = "2140353088@qq.com"
 
 [tool.briefcase.app.qq_music_downloader]
-formal_name = "qq音乐下载器"
+formal_name = "极简音乐下载器"
 description = "一款便捷的QQ音乐歌曲下载工具，支持高品质音乐下载"
-long_description = """QQ音乐下载器是一款专注于音乐下载的桌面工具软件，具有以下特点：
+long_description = """极简音乐下载器是一款专注于音乐下载的桌面工具软件，具有以下特点：
 
 1. 简单易用：清晰的界面设计，操作直观
 2. 下载高效：支持异步下载，更快更稳定

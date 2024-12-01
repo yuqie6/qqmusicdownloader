@@ -48,6 +48,7 @@ const ContactPage = () => {
                     <p className="text-gray-600">2140354088@qq.com</p>
                   </div>
                 </a>
+                
               </div>
               
               <div className="pt-6 border-t border-gray-200">

@@ -270,7 +270,7 @@ class QQMusicDownloaderApp(toga.App):
 
         # 创建主窗口
         self.main_window = toga.MainWindow(
-            title='QQ音乐下载器',
+            title='极简音乐下载器',
             size=(800, 600)
         )
         self.main_window.content = main_box
@@ -279,7 +279,7 @@ class QQMusicDownloaderApp(toga.App):
 
 def main():
     """应用程序入口点"""
-    return QQMusicDownloaderApp('QQ音乐下载器', 'org.example.qq_music_downloader')
+    return QQMusicDownloaderApp('极简音乐下载器', 'https://yuqie6.github.io/qqmusicdownloader')
 
 if __name__ == '__main__':
     app = main()
