@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Download, Music, Settings, Coffee, Github } from 'lucide-react';
 
 // 导航组件 - 处理顶部导航栏的显示
@@ -142,28 +143,25 @@ const LandingPage = () => {
               <div className="md:text-right">
                 <h3 className="text-lg font-semibold mb-4">快速链接</h3>
                 <div className="flex flex-col md:items-end gap-2">
-                  {/* 为未完成的链接添加临时的导航处理 */}
-                  <a 
-                    href="/guide" 
-                    onClick={(e) => handleNavigation(e, '使用教程')}
+                  {/* 把那些老式的 <a> 标签换成时尚的 Link 组件 */}
+                  <Link 
+                    to="/guide" 
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     使用教程
-                  </a>
-                  <a 
-                    href="/faq" 
-                    onClick={(e) => handleNavigation(e, '常见问题')}
+                  </Link>
+                  <Link 
+                    to="/faq" 
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     常见问题
-                  </a>
-                  <a 
-                    href="/contact" 
-                    onClick={(e) => handleNavigation(e, '联系我们')}
+                  </Link>
+                  <Link 
+                    to="/contact" 
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     联系我们
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
