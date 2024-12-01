@@ -62,12 +62,7 @@ const DownloadButton = ({ className = '' }) => (
 
 // 主页面组件
 const LandingPage = () => {
-  // 处理暂未完成的链接导航
-  const handleNavigation = (e, section) => {
-    e.preventDefault();
-    // 使用更友好的提示信息
-    alert(`${section}页面正在开发中，敬请期待！`);
-  };
+  
 
   return (
     <div className="min-h-screen">
@@ -99,8 +94,8 @@ const LandingPage = () => {
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             <FeatureCard
               icon={<Music className="w-8 h-8" />}
-              title="高品质音乐（预告）"
-              description="支持多种音质选择，让你享受最佳音乐体验，告别低音质。(未来会支持，正在开发）"
+              title="文件无加密"
+              description="文件没有任何加密下载到本地，可以无限制离线播放"
             />
             <FeatureCard
               icon={<Settings className="w-8 h-8" />}
@@ -138,6 +133,12 @@ const LandingPage = () => {
                 <h3 className="text-lg font-semibold mb-4">关于我们</h3>
                 <p className="text-gray-400">
                   极简音乐下载器致力于为用户提供简单、高效的音乐下载体验。
+                  一个开源项目，欢迎贡献和反馈。
+                  下载文件不可商用，仅供个人学习使用。
+                  只是作者用于学习交流，请勿用于商业用途。
+        
+                  须确保版权合法，否则后果自负。
+
                 </p>
               </div>
               <div className="md:text-right">

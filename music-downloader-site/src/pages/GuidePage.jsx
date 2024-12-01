@@ -55,7 +55,7 @@ const GuidePage = () => {
         <div className="mt-12 p-6 bg-blue-50 rounded-lg">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">温馨提示</h2>
           <ul className="list-disc list-inside text-gray-600 space-y-2">
-            <li>首次使用时请确保联网</li>
+            <li>使用时请确保联网</li>
             <li>建议使用最新版本以获得最佳体验</li>
             <li>如遇到问题，可以查看常见问题解答或联系我们获取帮助</li>
           </ul>
@@ -65,22 +65,6 @@ const GuidePage = () => {
   );
 };
 
-// FAQPage.jsx
-const FAQItem = ({ question, answer }) => (
-  <div className="border-b border-gray-200 last:border-0">
-    <details className="group p-6">
-      <summary className="flex justify-between items-center cursor-pointer list-none">
-        <span className="text-lg font-semibold text-gray-800">{question}</span>
-        <span className="text-blue-600 group-open:rotate-180 transition-transform">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </span>
-      </summary>
-      <p className="mt-4 text-gray-600">{answer}</p>
-    </details>
-  </div>
-);
 
 
 export default GuidePage;
