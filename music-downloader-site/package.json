@@ -1,6 +1,6 @@
 {
   "name": "music-downloader-site",
-  "version": "1.0.1",
+  "version": "0.1.0",
   "private": true,
   "homepage": "https://yuqie6.github.io/qqmusicdownloader",
   "dependencies": {
