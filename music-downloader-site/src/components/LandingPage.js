@@ -12,7 +12,7 @@ const Navbar = () => (
         </div>
         <div className="flex items-center gap-4">
           <a 
-            href="https://github.com" 
+            href="https://github.com/yuqie6/qqmusicdownloader/tree/v1.0.0" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors"
@@ -49,13 +49,14 @@ const FeatureCard = ({ icon, title, description }) => (
 
 // 下载按钮组件 - 统一的下载按钮样式
 const DownloadButton = ({ className = '' }) => (
-  <button 
+  <a
+  href="https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.0.0"
     className={`inline-flex items-center px-6 py-3 bg-white text-blue-600 rounded-lg font-semibold 
     hover:bg-blue-50 active:bg-blue-100 transition-colors duration-200 shadow-lg ${className}`}
   >
     <Download className="w-5 h-5 mr-2" />
-    立即下载
-  </button>
+    立即下载 v1.0.0
+  </a>
 );
 
 // 主页面组件
