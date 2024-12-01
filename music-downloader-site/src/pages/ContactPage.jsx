@@ -66,4 +66,4 @@ const ContactPage = () => {
   );
 };
 
-export { FAQPage, ContactPage };
+export default ContactPage;

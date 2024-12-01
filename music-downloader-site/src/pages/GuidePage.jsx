@@ -179,4 +179,4 @@ const ContactPage = () => {
   );
 };
 
-export { GuidePage, FAQPage, ContactPage };
+export default GuidePage;
