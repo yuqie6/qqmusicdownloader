@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, PlayCircle, Download, Search, Cookie, Music, MousePointerClick, Chrome } from 'lucide-react';
+import { ArrowLeft, Download, Search, Cookie, Music, MousePointerClick, Chrome } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const GuideStep = ({ number, title, description, icon, children }) => (
