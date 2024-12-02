@@ -28,8 +28,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/YOUR_USERNAME/qq-music-downloader.git
-cd qq-music-downloader
+git clone https://github.com/yuqie6/qqmusicdownloader.git
+cd qqmusicdownloader
 
 # 安装依赖
 pip install -r requirements.txt
