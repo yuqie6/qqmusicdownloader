@@ -55,7 +55,10 @@ class QQMusicDownloader:
         self.current_songs = []
         self.download_tasks = {}
         self.is_downloading = False
+        self.download_lock = asyncio.Lock()  # Add a lock for download state
         self.download_semaphore = asyncio.Semaphore(self.config.max_concurrent)
+        self._download_queue = asyncio.Queue()
+        self._current_task = None
         logger.info("下载器初始化完成")
 
     def get_download_path(self) -> str:
@@ -126,6 +129,7 @@ class QQMusicDownloader:
                 task.progress.status = "completed"
             else:
                 task.progress.status = "failed"
+            self.is_downloading = False
             return success
 
         except asyncio.CancelledError:
@@ -135,81 +139,137 @@ class QQMusicDownloader:
             task.progress.status = "failed"
             logger.error(f"下载失败: {e}")
             return False
-
+        
+        
 
     async def download_song(self, song_index: int, quality: int,
                           window: toga.Window, progress_bar=None,
-                          progress_label=None) -> bool:
+                          progress_label=None, suppress_dialogs=False) -> bool:
         """下载单首歌曲"""
-        if self.is_downloading:
-            logger.warning("已有下载任务在进行中")
-            await window.info_dialog('提示', '当前已有下载任务在进行中')
-            return False
-
-        try:
-            self.is_downloading = True
-
-            if not (0 <= song_index < len(self.current_songs)):
-                logger.error(f"无效的歌曲索引: {song_index}")
-                await window.error_dialog('错误', '无效的歌曲选择')
+        async with self.download_lock:
+            if self.is_downloading and not suppress_dialogs:
+                logger.warning("已有下载任务在进行中")
+                await window.dialog(
+                    toga.InfoDialog('提示', '当前已有下载任务在进行中')
+                )
                 return False
 
-            task = DownloadTask(self.current_songs[song_index], quality)
-            self.download_tasks[song_index] = task
+            try:
+                if not suppress_dialogs:
+                    self.is_downloading = True
 
-            async with self.download_semaphore:
+                if not (0 <= song_index < len(self.current_songs)):
+                    logger.error(f"无效的歌曲索引: {song_index}")
+                    if not suppress_dialogs:
+                        await window.dialog(
+                            toga.ErrorDialog('错误', '无效的歌曲选择')
+                        )
+                    return False
+
+                task = DownloadTask(self.current_songs[song_index], quality)
+                self.download_tasks[song_index] = task
+
                 success = await self._download_with_progress(
                     task, progress_bar, progress_label
                 )
 
-            if success:
-                logger.info(f"歌曲下载成功: {task.progress.filename}")
-                await window.info_dialog('成功', f'歌曲 {task.progress.filename} 下载完成')
-            else:
-                logger.error(f"歌曲下载失败: {task.progress.filename}")
-                await window.error_dialog('错误', f'歌曲 {task.progress.filename} 下载失败')
-
-            return success
-
-        finally:
-            self.is_downloading = False
-            if progress_label:
-                progress_label.text = '准备就绪'
-
-    async def batch_download(self, song_indices: List[int], quality: int,
-                           window: toga.Window, progress_callback: Callable = None) -> bool:
-        """批量下载歌曲"""
-        if self.is_downloading:
-            logger.warning("已有下载任务在进行中")
-            await window.info_dialog('提示', '当前已有下载任务在进行中')
-            return False
-
-        try:
-            self.is_downloading = True
-            tasks = []
-            
-            for index in song_indices:
-                if not (0 <= index < len(self.current_songs)):
-                    continue
-                    
-                task = DownloadTask(self.current_songs[index], quality)
-                self.download_tasks[index] = task
-                
-                tasks.append(
-                    asyncio.create_task(
-                        self._download_with_semaphore(task, window, progress_callback)
+                if success and not suppress_dialogs:
+                    logger.info(f"歌曲下载成功: {task.progress.filename}")
+                    await window.dialog(
+                        toga.InfoDialog('成功', f'歌曲 {task.progress.filename} 下载完成')
                     )
+                elif not success and not suppress_dialogs:
+                    logger.error(f"歌曲下载失败: {task.progress.filename}")
+                    await window.dialog(
+                        toga.ErrorDialog('错误', f'歌曲 {task.progress.filename} 下载失败')
+                    )
+
+                return success
+
+            finally:
+                if not suppress_dialogs:
+                    self.is_downloading = False
+                    if progress_label:
+                        progress_label.text = '准备就绪'
+                    if progress_bar:
+                        progress_bar.value = 0
+  
+    async def batch_download(self, song_indices: List[int], quality: int,
+                           window: toga.Window, progress_callback: Callable = None,
+                           progress_bar=None, status_label=None) -> bool:
+        """批量下载歌曲"""
+        async with self.download_lock:
+            if self.is_downloading:
+                logger.warning("已有下载任务在进行中")
+                await window.dialog(
+                    toga.InfoDialog('提示', '请等待当前下载任务完成')
                 )
+                return False
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            success_count = sum(1 for r in results if r and not isinstance(r, Exception))
-            
-            await self._show_batch_results(window, success_count, len(tasks))
-            return success_count == len(tasks)
+            try:
+                self.is_downloading = True
+                total_songs = len(song_indices)
+                completed_songs = 0
+                failed_songs = []
 
-        finally:
-            self.is_downloading = False
+                if progress_callback:
+                    progress_callback(f'开始下载 {total_songs} 首歌曲')
 
+                # Create tasks for all songs
+                tasks = []
+                for index in song_indices:
+                    song = self.current_songs[index]
+                    song_name = f"{song['name']} - {song['singer']}"
+                    
+                    task = asyncio.create_task(
+                        self._download_single_with_semaphore(
+                            index, quality, window,
+                            progress_bar, status_label,
+                            f'({completed_songs + 1}/{total_songs}): {song_name}'
+                        )
+                    )
+                    tasks.append(task)
+
+                # Wait for all tasks to complete
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        failed_songs.append(song_indices[i])
+                    elif result:
+                        completed_songs += 1
+
+                # Show final results
+                if completed_songs == total_songs:
+                    await window.dialog(
+                        toga.InfoDialog('完成', f'全部 {total_songs} 首歌曲下载完成')
+                    )
+                else:
+                    failed_count = len(failed_songs)
+                    await window.dialog(
+                        toga.InfoDialog(
+                            '完成',
+                            f'下载完成，成功 {completed_songs}/{total_songs} 首\n'
+                            f'失败 {failed_count} 首'
+                        )
+                    )
+
+                return completed_songs == total_songs
+
+            except Exception as e:
+                logger.error(f"批量下载出错: {e}")
+                if progress_callback:
+                    progress_callback(f'下载出错: {str(e)}')
+                return False
+
+            finally:
+                self.is_downloading = False
+                if status_label:
+                    status_label.text = '准备就绪'
+                if progress_bar:
+                    progress_bar.value = 0
+    
     async def _download_with_semaphore(self, task: DownloadTask, 
                                     window: toga.Window,
                                     progress_callback: Callable) -> bool:
@@ -252,6 +312,29 @@ class QQMusicDownloader:
             self.is_downloading = False
             logger.info("所有下载任务已取消")
 
+    async def _download_single_with_semaphore(self, index: int, quality: int,
+                                            window: toga.Window,
+                                            progress_bar=None,
+                                            status_label=None,
+                                            progress_text=None) -> bool:
+        """使用信号量控制的单曲下载"""
+        async with self.download_semaphore:
+            try:
+                if status_label and progress_text:
+                    status_label.text = f'下载中 {progress_text}'
+                
+                return await self.download_song(
+                    index,
+                    quality,
+                    window,
+                    progress_bar,
+                    status_label,
+                    suppress_dialogs=True  # Suppress individual dialogs in batch mode
+                )
+            except Exception as e:
+                logger.error(f"下载失败: {e}")
+                return False
+            
     def pause_all(self):
         """暂停所有下载任务"""
         for task in self.download_tasks.values():

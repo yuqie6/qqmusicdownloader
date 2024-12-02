@@ -19,6 +19,7 @@ class QQMusicDownloaderApp(toga.App):
         self.download_tasks = []
         self.selected_indices = set()
         self.download_task = None
+        self.current_selected = None
         self._setup_app_state()
 
     def _setup_app_state(self):
@@ -98,13 +99,19 @@ class QQMusicDownloaderApp(toga.App):
 
     def _create_results_section(self):
         """创建结果显示区域"""
+        def data_selected(row):
+            return '✓' if row.index in self.selected_indices else ' '
+        self.selected_indices = set() 
         self.results_table = toga.Table(
             headings=['选择', '序号', '歌曲名', '歌手', '专辑'],
-            accessors=['selected', 'index', 'name', 'singer', 'album'],  # 添加 accessors
+            accessors=['selected', 'index', 'name', 'singer', 'album'],
             data=[],
             style=Pack(flex=1, padding=5),
             on_select=self.on_table_select
         )
+        
+        # 添加选择列的处理逻辑
+        self.selected_rows = set()
         return self.results_table
 
 
@@ -233,56 +240,60 @@ class QQMusicDownloaderApp(toga.App):
 
     def update_song_list(self, songs):
         """更新歌曲列表显示"""
-        self.results_table.data = [
-            {
-                'selected': 'Yes' if i in self.selected_indices else '',
-                'index': str(i+1),
-                'name': song['name'],
-                'singer': song['singer'],
-                'album': song['album']
-            }
-            for i, song in enumerate(songs)
-        ]
+        if self.batch_switch.value:  # 批量模式下
+            self.results_table.data = [
+                {
+                    'selected': '[√]' if i in self.selected_indices else '[ ]',
+                    'index': str(i+1),
+                    'name': song['name'],
+                    'singer': song['singer'],
+                    'album': song['album']
+                }
+                for i, song in enumerate(songs)
+            ]
+        else:  # 单选模式下
+            self.results_table.data = [
+                {
+                    'selected': '[√]' if i == self.current_selected else '[ ]',
+                    'index': str(i+1),
+                    'name': song['name'],
+                    'singer': song['singer'],
+                    'album': song['album']
+                }
+                for i, song in enumerate(songs)
+            ]
 
 
 
-    def on_table_select(self, widget, row=None):
+    def on_table_select(self, widget, **kwargs):
         """处理表格选择事件"""
-        if row:
-            try:
-                selected_index = int(row.index) - 1  # 修改这里，使用 row.index
-                if self.is_batch_mode:
-                    # 切换选中状态
-                    if selected_index in self.selected_indices:
-                        self.selected_indices.remove(selected_index)
-                    else:
-                        self.selected_indices.add(selected_index)
-                    # 更新歌曲列表显示
-                    self.update_song_list(self.downloader.current_songs)
-                else:
-                    song = self.downloader.current_songs[selected_index]
-                    self.status_label.text = f"已选择：{song['name']} - {song['singer']}"
-            except Exception as e:
-                logger.error(f"选择处理失败: {e}")
+        print(f"开始处理选择事件：widget={widget}, kwargs={kwargs}")  # 看看到底收到了什么
+        
+        try:
+            # 获取选中的行
+            selection = widget.selection
+            if not selection:
+                return
+                
+            # 获取行号
+            selected_index = int(selection.index) - 1
+            print(f"选中的行号：{selected_index}")  # 调试信息
+            
+            if selected_index in self.selected_indices:
+                self.selected_indices.remove(selected_index)
+                print(f"取消选择第 {selected_index} 行")
+            else:
+                self.selected_indices.add(selected_index)
+                print(f"选择第 {selected_index} 行")
+                
+            self.update_song_list(self.downloader.current_songs)
+            
+        except Exception as e:
+            print(f"处理选择时出错：{str(e)}")
 
-
-
+    # 在 app.py 的 start_batch_download 方法中
     async def start_download(self, widget):
-        """开始下载"""
-        if not self.results_table.selection and not self.is_batch_mode:
-            await self.main_window.dialog(
-                toga.InfoDialog('提示', '请选择要下载的歌曲')
-            )
-            return
-
-        quality_text = self.quality_selection.value
-        quality_map = {
-            '标准品质 (128kbps)': 1,
-            '高品质 (320kbps)': 2,
-            '无损品质 (FLAC)': 3
-        }
-        quality = quality_map.get(quality_text, 1)
-
+        """下载处理入口"""
         try:
             if self.is_batch_mode:
                 if not self.selected_indices:
@@ -291,23 +302,63 @@ class QQMusicDownloaderApp(toga.App):
                     )
                     return
                 indices = list(self.selected_indices)
-                self.start_batch_download(indices, quality)
+                await self.downloader.batch_download(
+                    indices,
+                    self._get_selected_quality(),
+                    self.main_window,
+                    self.update_batch_progress,
+                    self.progress_bar,
+                    self.status_label
+                )
             else:
+                if not self.results_table.selection:
+                    await self.main_window.dialog(
+                        toga.InfoDialog('提示', '请选择要下载的歌曲')
+                    )
+                    return
                 selected_index = int(self.results_table.selection.index) - 1
-                self.start_single_download(selected_index, quality)
+                await self.start_single_download(
+                    selected_index,
+                    self._get_selected_quality()
+                )
         except Exception as e:
             logger.error(f"下载启动失败: {e}")
             await self.main_window.dialog(
-                toga.ErrorDialog('错误', f'下载启动失败: {str(e)}')
+                toga.ErrorDialog('错误', f'下载失败: {str(e)}')
             )
 
-    def start_single_download(self, index: int, quality: int):
+    def _get_selected_quality(self):
+            """获取选择的音质"""
+            quality_text = self.quality_selection.value
+            quality_map = {
+                '标准品质 (128kbps)': 1,
+                '高品质 (320kbps)': 2,
+                '无损品质 (FLAC)': 3
+            }
+            return quality_map.get(quality_text, 1)
+        
+
+    async def start_single_download(self, index: int, quality: int):
         """开始单曲下载"""
-        self.pause_button.enabled = True
-        self.download_task = asyncio.create_task(
-            self._download_single_song(index, quality)
-        )
-        self.download_task.add_done_callback(self._on_download_complete)
+        try:
+            self.pause_button.enabled = True
+            # 直接等待下载完成
+            success = await self.downloader.download_song(
+                index,
+                quality,
+                self.main_window,
+                self.progress_bar,
+                self.status_label
+            )
+            if success:
+                self.status_label.text = "下载完成"
+            else:
+                self.status_label.text = "下载失败"
+        except Exception as e:
+            logger.error(f"下载出错: {e}")
+            self.status_label.text = f"下载出错: {str(e)}"
+        finally:
+            self.pause_button.enabled = False
 
     async def _download_single_song(self, index: int, quality: int):
         await self.downloader.download_song(
@@ -337,6 +388,13 @@ class QQMusicDownloaderApp(toga.App):
     def update_batch_progress(self, message: str):
         """更新批量下载进度"""
         self.status_label.text = message
+        # 根据消息内容更新进度条
+        if "正在下载" in message:
+            try:
+                current, total = message.split("(")[1].split(")")[0].split("/")
+                self.progress_bar.value = (int(current) / int(total)) * 100
+            except:
+                pass  # 如果解析失败就不更新进度条
 
     def toggle_pause(self, widget):
         """切换暂停/继续状态"""
@@ -352,7 +410,7 @@ class QQMusicDownloaderApp(toga.App):
     def startup(self):
         """应用程序启动入口"""
         self.main_window = toga.MainWindow(
-            title='QQ音乐下载器',
+            title='极简音乐下载器',
             size=(800, 600)
         )
         self.main_window.content = self.create_interface()
@@ -366,8 +424,8 @@ class QQMusicDownloaderApp(toga.App):
 
 def main():
     """程序入口点"""
-    return QQMusicDownloaderApp('QQ音乐下载器',
-                              'org.example.qqmusicdownloader')
+    return QQMusicDownloaderApp('极简音乐下载器',
+                              'https://yuqie6.github.io/qqmusicdownloader')
 
 if __name__ == '__main__':
     app = main()
