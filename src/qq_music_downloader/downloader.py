@@ -230,34 +230,29 @@ class QQMusicDownloader:
                     progress_bar.value = 0
                         
     async def batch_download(self, song_indices: List[int], quality: int,
-                        window: toga.Window, progress_callback: Callable = None,
-                        progress_bar=None, status_label=None) -> bool:
+                            window: toga.Window, progress_callback: Callable = None,
+                            progress_bar=None, status_label=None) -> bool:
         async with self.download_lock:
             try:
                 logger.info(f"开始批量下载，选中歌曲索引: {song_indices}")
-                if self.is_downloading:
-                    logger.warning("已有下载任务在进行中")
-                    await window.dialog(
-                        toga.InfoDialog('提示', '请等待当前下载任务完成')
-                    )
-                    return False
-
                 self.is_downloading = True
                 total_songs = len(song_indices)
                 completed_songs = 0
                 failed_songs = []
 
-                # 初始化进度条为0
+                # 初始化进度条
                 if progress_bar:
                     progress_bar.value = 0
 
-                for index in song_indices:
+                # 对每首歌进行下载
+                for current_index, index in enumerate(song_indices, 1):  # 使用enumerate从1开始计数
                     try:
                         song = self.current_songs[index]
                         song_name = f"{song['name']} - {song['singer']}"
                         
+                        # 更新状态标签，显示当前正在下载第几首歌
                         if status_label:
-                            status_label.text = f'下载中 ({completed_songs + 1}/{total_songs}): {song_name}'
+                            status_label.text = f'下载中 ({current_index}/{total_songs}): {song_name}'
                         
                         # 获取下载URL
                         song_url = await self.api.get_song_url(song['songmid'], quality)
@@ -265,11 +260,11 @@ class QQMusicDownloader:
                             failed_songs.append(song_name)
                             continue
 
-                        # 创建下载任务并关联全局暂停事件
+                        # 创建下载任务
                         task = DownloadTask(song, quality)
                         self.download_tasks[index] = task
                         
-                        # 执行下载
+                        # 执行下载，传入正确的进度信息
                         success = await self.api.download_with_lyrics(
                             song_url,
                             task.progress.filename,
@@ -282,13 +277,14 @@ class QQMusicDownloader:
 
                         if success:
                             completed_songs += 1
-                            logger.info(f"完成下载: {song_name}")
                             # 更新总体进度
                             if progress_bar:
                                 progress_bar.value = (completed_songs / total_songs) * 100
+                            # 回调通知进度
+                            if progress_callback:
+                                progress_callback(f'已完成 ({completed_songs}/{total_songs}): {song_name}')
                         else:
                             failed_songs.append(song_name)
-                            logger.error(f"下载失败: {song_name}")
 
                     except Exception as e:
                         logger.error(f"下载歌曲时出错: {str(e)}")
