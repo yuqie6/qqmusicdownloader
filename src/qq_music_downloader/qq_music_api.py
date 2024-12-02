@@ -46,6 +46,7 @@ class QQMusicAPI:
             'Connection': 'keep-alive',
             'Origin': 'https://y.qq.com'
         }
+    
     async def validate_cookie(self) -> bool:
         """验证Cookie是否有效
         
@@ -84,6 +85,7 @@ class QQMusicAPI:
         except Exception as e:
             logger.error(f"Cookie验证失败: {e}")
             return False
+   
     async def search_song(self, keyword: str) -> List[Dict]:
         """搜索歌曲
         
@@ -145,6 +147,7 @@ class QQMusicAPI:
         except Exception as e:
             logger.error(f"搜索歌曲时出错: {e}")
             raise  # 向上层抛出异常，让调用者处理
+   
     def _setup_session(self):
         """设置异步会话"""
         self.timeout = aiohttp.ClientTimeout(total=self.config.timeout)
@@ -160,6 +163,7 @@ class QQMusicAPI:
             directory.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"下载目录初始化完成: {self.base_dir}")
+   
     def get_download_path(self) -> str:
         """返回下载目录路径"""
         return str(self.base_dir)  # 返回基础目录的字符串表示
@@ -185,65 +189,87 @@ class QQMusicAPI:
                 return await self._make_request(url, params, retry + 1, headers)
             raise
 
-
     async def download_with_lyrics(self, url: str, filename: str, quality: int,
-                                 songmid: str, progress_bar=None,
-                                 progress_label=None,
-                                 pause_event=None) -> bool:
-        """增强的下载实现"""
+                                songmid: str, progress_bar=None,
+                                progress_label=None, pause_events=None) -> bool:
+        """支持多重暂停控制的下载实现"""
         try:
             ext = 'flac' if quality == 3 else 'm4a'
             filename = self._sanitize_filename(filename)
             file_path = self.music_dir / f"{filename}.{ext}"
             
-            # 检查文件是否已存在
-            if file_path.exists():
-                logger.info(f"文件已存在: {filename}")
-                return True
+            logger.info(f"开始下载文件: {filename}.{ext}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers) as response:
+                    if response.status != 200:
+                        return False
 
-            start_time = datetime.now()
-            total_size = 0
-            downloaded = 0
-
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(url) as response:
-                    response.raise_for_status()
                     total_size = int(response.headers.get('content-length', 0))
+                    if total_size == 0:
+                        return False
 
-                    if progress_bar:
-                        progress_bar.max = 100
-                        progress_bar.value = 0
-
-                    # 使用临时文件下载
                     temp_path = file_path.with_suffix('.tmp')
-                    async with aiofiles.open(temp_path, mode='wb') as f:
-                        async for chunk in response.content.iter_chunked(
-                                self.config.chunk_size):
-                            # 检查暂停状态
-                            if pause_event:
-                                await pause_event.wait()
+                    downloaded = 0
+                    start_time = datetime.now()
+                    last_progress_update = datetime.now()
+
+                    try:
+                        async with aiofiles.open(temp_path, mode='wb') as f:
+                            async for chunk in response.content.iter_chunked(self.config.chunk_size):
+                                # 检查所有暂停事件
+                                if pause_events:
+                                    if not isinstance(pause_events, list):
+                                        pause_events = [pause_events]
+                                        
+                                    for event in pause_events:
+                                        await event.wait()
+
+                                await f.write(chunk)
+                                downloaded += len(chunk)
                                 
-                            await f.write(chunk)
-                            downloaded += len(chunk)
-                            
-                            # 更新进度信息
-                            await self._update_progress(
-                                downloaded, total_size,
-                                start_time, progress_bar,
-                                progress_label, filename
-                            )
+                                current_time = datetime.now()
+                                if (current_time - last_progress_update).total_seconds() >= 0.1:
+                                    # 计算单个文件的下载进度
+                                    file_progress = (downloaded * 100) / total_size
+                                    speed = downloaded / max(1, (current_time - start_time).total_seconds()) / 1024
+                                    
+                                    if progress_bar and not isinstance(progress_bar.value, str):
+                                        # 这里只更新进度条，不设置为100%
+                                        progress_bar.value = file_progress
+                                    
+                                    if progress_label:
+                                        eta = (total_size - downloaded) / (max(1, speed) * 1024)
+                                        progress_label.text = (
+                                            f'下载中: {filename}\n'
+                                            f'进度: {file_progress:.1f}%\n'
+                                            f'速度: {speed:.1f} KB/s\n'
+                                            f'剩余时间: {int(eta)}秒'
+                                        )
+                                    
+                                    last_progress_update = current_time
 
-                    # 下载完成后重命名文件
-                    temp_path.rename(file_path)
+                        # 下载完成后重命名文件
+                        temp_path.rename(file_path)
+                        logger.info(f"下载完成: {filename}")
 
-            # 下载歌词
-            await self._download_lyrics(filename, songmid, progress_label)
-            return True
+                        # 下载歌词
+                        try:
+                            await self._download_lyrics(filename, songmid, progress_label)
+                        except Exception as e:
+                            logger.error(f"歌词下载失败: {e}")
+
+                        return True
+
+                    except Exception as e:
+                        if temp_path.exists():
+                            temp_path.unlink()
+                        raise
 
         except Exception as e:
-            logger.error(f"下载失败 {filename}: {e}")
+            logger.error(f"下载失败 {filename}: {str(e)}")
             return False
-
+   
     async def _download_lyrics(self, filename: str, songmid: str,
                              progress_label=None) -> bool:
         """下载歌词"""
@@ -284,6 +310,7 @@ class QQMusicAPI:
                     f'速度: {speed:.1f} KB/s\n'
                     f'剩余时间: {eta:.1f}s'
                 )
+    
     async def get_song_url(self, songmid: str, quality: int) -> Optional[str]:
         """获取歌曲的下载链接
 
@@ -295,6 +322,7 @@ class QQMusicAPI:
             Optional[str]: 歌曲的下载链接，如果获取失败则返回 None
         """
         try:
+            logger.info(f"开始获取歌曲下载地址: songmid={songmid}, quality={quality}")
             guid = str(random.randint(1000000000, 9999999999))
             uin_match = re.search(r'uin=(\d+);', self.cookie)
             uin = uin_match.group(1) if uin_match else '0'
@@ -309,6 +337,8 @@ class QQMusicAPI:
             else:
                 return None
 
+            logger.info(f"请求参数: guid={guid}, uin={uin}")
+            
             url = "https://u.y.qq.com/cgi-bin/musicu.fcg"
             data = {
                 "req": {
@@ -347,16 +377,28 @@ class QQMusicAPI:
 
             response = await self._make_request(url, params=params)
 
+            
             if response and 'req_0' in response:
-                vkey = response['req_0']['data']['midurlinfo'][0]['vkey']
-                if vkey:
-                    purl = response['req_0']['data']['midurlinfo'][0]['purl']
-                    song_url = f"https://isure.stream.qqmusic.qq.com/{purl}"
-                    return song_url
+                midurlinfo = response['req_0']['data']['midurlinfo'][0]
+                purl = midurlinfo.get('purl', '')
+                vkey = midurlinfo.get('vkey', '')
+                
+                logger.info(f"获取到的purl: {purl}")
+                logger.info(f"获取到的vkey: {vkey}")
+                
+                if purl:
+                    final_url = f"https://isure.stream.qqmusic.qq.com/{purl}"
+                    logger.info(f"成功构建最终URL: {final_url}")
+                    return final_url
+                else:
+                    logger.error(f"未获取到purl，完整响应: {json.dumps(midurlinfo, ensure_ascii=False)}")
+            else:
+                logger.error(f"响应格式错误，完整响应: {json.dumps(response, ensure_ascii=False)}")
             return None
-
+            
         except Exception as e:
-            logger.error(f"获取歌曲链接失败: {e}")
+            logger.error(f"获取歌曲下载地址时出错: {str(e)}")
+            logger.exception(e)  # 这会打印完整的错误堆栈
             return None
 
     async def get_lyrics(self, songmid: str) -> Optional[str]:
@@ -391,8 +433,6 @@ class QQMusicAPI:
             logger.error(f"获取歌词失败: {e}")
             return None
 
-
-
     def _clean_cookie(self, cookie: str) -> str:
         """清理Cookie字符串"""
         cookie = cookie.replace('*', '%2A')
@@ -405,3 +445,49 @@ class QQMusicAPI:
         for char in illegal_chars:
             filename = filename.replace(char, '_')
         return filename
+
+@dataclass
+class DownloadMonitor:
+    """下载状态监控器"""
+    filename: str
+    total_size: int = 0
+    downloaded: int = 0
+    start_time: datetime = None
+    last_update: datetime = None
+    status: str = "准备中"
+    error_message: str = ""
+
+    def start(self):
+        """开始下载"""
+        self.start_time = datetime.now()
+        self.last_update = datetime.now()
+        self.status = "下载中"
+        logger.info(f"开始下载: {self.filename}")
+
+    def update(self, chunk_size: int):
+        """更新下载进度"""
+        self.downloaded += chunk_size
+        current_time = datetime.now()
+        
+        if (current_time - self.last_update).total_seconds() >= 0.1:
+            progress = (self.downloaded * 100) / self.total_size if self.total_size > 0 else 0
+            speed = self.downloaded / max(1, (current_time - self.start_time).total_seconds()) / 1024
+            
+            logger.info(f"下载进度 - {self.filename}: {progress:.1f}% "
+                       f"({self.downloaded}/{self.total_size} bytes), "
+                       f"速度: {speed:.1f} KB/s")
+            
+            self.last_update = current_time
+
+    def complete(self):
+        """完成下载"""
+        self.status = "已完成"
+        duration = (datetime.now() - self.start_time).total_seconds()
+        logger.info(f"下载完成 - {self.filename}: 总大小 {self.total_size/1024/1024:.2f}MB, "
+                   f"耗时 {duration:.1f}秒")
+
+    def error(self, message: str):
+        """记录错误"""
+        self.status = "错误"
+        self.error_message = message
+        logger.error(f"下载错误 - {self.filename}: {message}")
