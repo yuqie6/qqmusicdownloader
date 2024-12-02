@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Music, Settings, Coffee, Github } from 'lucide-react';
+import { Download, Music, Settings, Coffee, Github, AlertTriangle, Clock } from 'lucide-react';
 
-// 导航组件 - 处理顶部导航栏的显示
+// Navbar component remains the same...
 const Navbar = () => (
   <nav className="fixed w-full top-0 bg-white/80 backdrop-blur-sm z-50 shadow-sm">
     <div className="container mx-auto px-4 py-3">
@@ -33,7 +33,7 @@ const Navbar = () => (
   </nav>
 );
 
-// 特性卡片组件 - 用于显示产品特点
+// FeatureCard component remains the same...
 const FeatureCard = ({ icon, title, description }) => (
   <div className="bg-white p-6 rounded-xl border border-gray-200 hover:shadow-lg transition-all duration-300 group">
     <div className="text-blue-600 mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -48,27 +48,148 @@ const FeatureCard = ({ icon, title, description }) => (
   </div>
 );
 
-// 下载按钮组件 - 统一的下载按钮样式
-const DownloadButton = ({ className = '' }) => (
-  <a
-  href="https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.0.0"
-    className={`inline-flex items-center px-6 py-3 bg-white text-blue-600 rounded-lg font-semibold 
-    hover:bg-blue-50 active:bg-blue-100 transition-colors duration-200 shadow-lg ${className}`}
-  >
-    <Download className="w-5 h-5 mr-2" />
-    立即下载 v1.0.0
-  </a>
+// New simplified LegalWarning component
+const LegalWarning = () => (
+  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-8 rounded">
+    <div className="flex items-center">
+      <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+      <p className="text-red-700">
+        本软件仅供个人学习和研究使用，严禁用于商业用途。用户需确保下载内容符合相关版权法规，
+        任何因违规使用造成的法律责任由用户自行承担。
+      </p>
+    </div>
+  </div>
 );
 
-// 主页面组件
-const LandingPage = () => {
+// New Changelog component
+const Changelog = () => {
+  const versions = [
+    {
+      version: 'v1.1.0',
+      date: '2024-12-02',
+      type: '重大更新',
+      features: [
+        {
+          title: '✨ 新增功能',
+          changes: [
+            '🚀 支持批量下载 - 终于可以一次下载至多20首歌了！',
+            '⏯️ 新增下载暂停/继续功能 - 当你的网速像蜗牛时，至少可以暂停一下~',
+            '📊 下载进度实时显示 - 再也不用盯着文件夹傻等了'
+          ]
+        },
+        {
+          title: '💄 优化',
+          changes: [
+            '界面有所改动，增加了下载暂停/继续按钮',
+            '下载完成后通知更及时，再也不用盯着文件夹傻等了'
+          ]
+        },
+        {
+          title: '⚠️ 已知问题',
+          changes: [
+            '进度条会抽风',
+            'cookie检验机制有问题，不保证100%可用'
+          ]
+        }
+      ]
+    },
+    {
+      version: 'v1.0.0',
+      date: '2024-12-01',
+      type: '首次发布',
+      features: [
+        {
+          title: '🎉 首次发布',
+          changes: [
+            '🔍 支持QQ音乐歌曲搜索',
+            '⬇️ 单曲下载功能',
+            '🎨 简洁的界面设计'
+          ]
+        }
+      ]
+    }
+  ];
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+        <Clock className="w-5 h-5" />
+        更新日志
+      </h3>
+      <div className="space-y-6">
+        {versions.map((release) => (
+          <div key={release.version} className="border-l-2 border-blue-600 pl-4 mb-8">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="font-semibold text-xl text-blue-600">{release.version}</h4>
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">{release.type}</span>
+              <span className="text-sm text-gray-500">{release.date}</span>
+            </div>
+            
+            {release.features.map((feature, idx) => (
+              <div key={idx} className="mb-4">
+                <h5 className="font-medium text-gray-800 mb-2">{feature.title}</h5>
+                <ul className="space-y-2 text-gray-600">
+                  {feature.changes.map((change, changeIdx) => (
+                    <li key={changeIdx} className="flex items-start gap-2">
+                      <span className="inline-block">•</span>
+                      <span>{change}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Updated DownloadButton component with version selection
+const DownloadButton = ({ className = '', version }) => {
+  // 暂时将所有版本链接指向 'coming-soon'，等待后续更新
+  const downloadLink = 'coming-soon';
   
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative">
+        <select 
+          className="appearance-none px-6 py-3 pr-12 bg-white text-blue-600 rounded-lg font-semibold 
+          hover:bg-blue-50 active:bg-blue-100 transition-colors duration-200 shadow-lg cursor-pointer
+          focus:outline-none focus:ring-2 focus:ring-blue-500"
+          defaultValue={version}
+        >
+          <option value="v1.1.0">v1.1.0 - 最新版本</option>
+          <option value="v1.0.0">v1.0.0 - 初始版本</option>
+        </select>
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+      <a
+        href={downloadLink}
+        className={`inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold 
+        hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 ${className}`}
+      >
+        <Download className="w-5 h-5 mr-2" />
+        即将开放下载...
+      </a>
+      <p className="text-sm text-gray-500">下载链接正在准备中，敬请期待！</p>
+    </div>
+  );
+};
+
+// Main LandingPage component
+const LandingPage = () => {
+  const [selectedVersion] = useState('v1.0.0');
 
   return (
     <div className="min-h-screen">
       <Navbar />
       
-      {/* Hero Section - 主要展示区域 */}
+      {/* Hero Section */}
       <div className="relative pt-16">
         <div className="bg-gradient-to-br from-blue-600 to-purple-600">
           <div className="container mx-auto px-4 py-24">
@@ -79,13 +200,13 @@ const LandingPage = () => {
               <p className="text-lg md:text-xl text-white/90 mb-8">
                 简单易用的音乐下载工具，让音乐触手可及
               </p>
-              <DownloadButton />
+              <DownloadButton version={selectedVersion} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Features Section - 功能特性展示区域 */}
+      {/* Features Section */}
       <div className="py-20 bg-gray-50">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
@@ -111,20 +232,28 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Download Section - 下载区域 */}
+      {/* Download Section with Legal Warning */}
       <div id="download" className="py-20 bg-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">
-            准备好开始了吗？
-          </h2>
-          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            立即下载极简音乐下载器，开启你的音乐之旅。完全免费，无需注册。
-          </p>
-          <DownloadButton />
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">
+              准备好开始了吗？
+            </h2>
+            <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+              立即下载极简音乐下载器，开启你的音乐之旅。完全免费，无需注册。
+            </p>
+            <LegalWarning />
+            <DownloadButton version={selectedVersion} />
+          </div>
+          
+          {/* Changelog Section */}
+          <div className="mt-16">
+            <Changelog />
+          </div>
         </div>
       </div>
 
-      {/* Footer - 页脚区域 */}
+      {/* Footer */}
       <footer className="bg-gray-800 text-white py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
@@ -133,18 +262,13 @@ const LandingPage = () => {
                 <h3 className="text-lg font-semibold mb-4">关于我们</h3>
                 <p className="text-gray-400">
                   极简音乐下载器致力于为用户提供简单、高效的音乐下载体验。
-                  一个开源项目，欢迎贡献和反馈。
-                  下载文件不可商用，仅供个人学习使用。
-                  只是作者用于学习交流，请勿用于商业用途。
-        
-                  须确保版权合法，否则后果自负。
-
+                  这是一个开源项目，欢迎贡献和反馈。下载文件仅供个人学习使用，
+                  不得用于商业用途。作者创作初衷仅为学习交流，请遵守相关法律法规。
                 </p>
               </div>
               <div className="md:text-right">
                 <h3 className="text-lg font-semibold mb-4">快速链接</h3>
                 <div className="flex flex-col md:items-end gap-2">
-                  {/* 把那些老式的 <a> 标签换成时尚的 Link 组件 */}
                   <Link 
                     to="/guide" 
                     className="text-gray-400 hover:text-white transition-colors"
