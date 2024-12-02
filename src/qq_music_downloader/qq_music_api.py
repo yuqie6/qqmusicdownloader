@@ -165,27 +165,26 @@ class QQMusicAPI:
         return str(self.base_dir)  # 返回基础目录的字符串表示
 
     async def _make_request(self, url: str, params: Optional[Dict] = None,
-                          retry: int = 0) -> Dict:
+                            retry: int = 0, headers: Optional[Dict] = None) -> Dict:
         """发送HTTP请求并处理响应"""
         try:
-            async with aiohttp.ClientSession(headers=self.headers,
-                                           timeout=self.timeout) as session:
+            request_headers = headers if headers is not None else self.headers
+            async with aiohttp.ClientSession(headers=request_headers,
+                                            timeout=self.timeout) as session:
                 async with session.get(url, params=params) as response:
                     response.raise_for_status()
                     text = await response.text()
-                    
                     # 处理JSONP响应
                     if text.startswith(('callback(', 'MusicJsonCallback(',
-                                      'jsonCallback(')):
+                                        'jsonCallback(')):
                         text = text[text.find('(')+1:text.rfind(')')]
-                    
                     return json.loads(text)
-                    
         except Exception as e:
             if retry < self.config.retry_times:
                 await asyncio.sleep(self.config.retry_delay)
-                return await self._make_request(url, params, retry + 1)
+                return await self._make_request(url, params, retry + 1, headers)
             raise
+
 
     async def download_with_lyrics(self, url: str, filename: str, quality: int,
                                  songmid: str, progress_bar=None,

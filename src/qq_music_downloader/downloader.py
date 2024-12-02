@@ -111,6 +111,7 @@ class QQMusicDownloader:
             return False
 
         try:
+            task.progress.status = "downloading"  # 设置任务状态为下载中
             success = await self.api.download_with_lyrics(
                 song_url,
                 task.progress.filename,
@@ -123,6 +124,8 @@ class QQMusicDownloader:
             
             if success:
                 task.progress.status = "completed"
+            else:
+                task.progress.status = "failed"
             return success
 
         except asyncio.CancelledError:
@@ -132,6 +135,7 @@ class QQMusicDownloader:
             task.progress.status = "failed"
             logger.error(f"下载失败: {e}")
             return False
+
 
     async def download_song(self, song_index: int, quality: int,
                           window: toga.Window, progress_bar=None,
@@ -207,22 +211,26 @@ class QQMusicDownloader:
             self.is_downloading = False
 
     async def _download_with_semaphore(self, task: DownloadTask, 
-                                     window: toga.Window,
-                                     progress_callback: Callable) -> bool:
+                                    window: toga.Window,
+                                    progress_callback: Callable) -> bool:
         """使用信号量控制的下载实现"""
         async with self.download_semaphore:
             try:
+                task.progress.status = "downloading"  # 设置任务状态为下载中
                 if progress_callback:
                     progress_callback(f'正在下载: {task.progress.filename}')
                     
-                return await self._download_with_progress(
+                success = await self._download_with_progress(
                     task,
                     progress_bar=None,
                     progress_label=None
                 )
+                return success
             except Exception as e:
+                task.progress.status = "failed"
                 logger.error(f"下载任务失败: {e}")
                 return False
+
 
     async def _show_batch_results(self, window: toga.Window, 
                                 success_count: int, total: int):
@@ -247,11 +255,9 @@ class QQMusicDownloader:
     def pause_all(self):
         """暂停所有下载任务"""
         for task in self.download_tasks.values():
-            if task.progress.status == "downloading":
-                task.pause()
+            task.pause()
 
     def resume_all(self):
         """恢复所有下载任务"""
         for task in self.download_tasks.values():
-            if task.progress.status == "downloading":
-                task.resume()
+            task.resume()
