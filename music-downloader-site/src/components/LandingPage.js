@@ -13,7 +13,7 @@ const Navbar = () => (
         </div>
         <div className="flex items-center gap-4">
           <a 
-            href="https://github.com/yuqie6/qqmusicdownloader/tree/v1.0.0" 
+            href="https://github.com/yuqie6/qqmusicdownloader" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors"
