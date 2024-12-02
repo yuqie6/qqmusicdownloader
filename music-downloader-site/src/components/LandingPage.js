@@ -147,8 +147,18 @@ const Changelog = () => {
 
 // Updated DownloadButton component with version selection
 const DownloadButton = ({ className = '', version }) => {
-  // 暂时将所有版本链接指向 'coming-soon'，等待后续更新
-  const downloadLink = 'coming-soon';
+  const [selectedVersion, setSelectedVersion] = useState(version);
+
+  const getDownloadLink = (ver) => {
+    switch (ver) {
+      case 'v1.1.0':
+        return 'https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.1.0';
+      case 'v1.0.0':
+        return 'https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.0.0';
+      default:
+        return 'https://github.com/yuqie6/qqmusicdownloader/releases';
+    }
+  };
   
   return (
     <div className="flex flex-col items-center gap-4">
@@ -157,7 +167,8 @@ const DownloadButton = ({ className = '', version }) => {
           className="appearance-none px-6 py-3 pr-12 bg-white text-blue-600 rounded-lg font-semibold 
           hover:bg-blue-50 active:bg-blue-100 transition-colors duration-200 shadow-lg cursor-pointer
           focus:outline-none focus:ring-2 focus:ring-blue-500"
-          defaultValue={version}
+          value={selectedVersion}
+          onChange={(e) => setSelectedVersion(e.target.value)}
         >
           <option value="v1.1.0">v1.1.0 - 最新版本</option>
           <option value="v1.0.0">v1.0.0 - 初始版本</option>
@@ -169,21 +180,23 @@ const DownloadButton = ({ className = '', version }) => {
         </div>
       </div>
       <a
-        href={downloadLink}
+        href={getDownloadLink(selectedVersion)}
         className={`inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold 
         hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 ${className}`}
+        target="_blank"
+        rel="noopener noreferrer"
       >
         <Download className="w-5 h-5 mr-2" />
-        即将开放下载...
+        立即下载 {selectedVersion}
       </a>
-      <p className="text-sm text-gray-500">下载链接正在准备中，敬请期待！</p>
+      <p className="text-sm text-gray-500">请选择您需要的版本进行下载</p>
     </div>
   );
 };
 
 // Main LandingPage component
 const LandingPage = () => {
-  const [selectedVersion] = useState('v1.0.0');
+  const [selectedVersion] = useState('v1.1.0'); // 默认选择最新版本
 
   return (
     <div className="min-h-screen">
