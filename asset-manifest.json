@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/qqmusicdownloader/static/css/main.c482704d.css",
-    "main.js": "/qqmusicdownloader/static/js/main.b7e6cb8e.js",
+    "main.css": "/qqmusicdownloader/static/css/main.7dc8fd45.css",
+    "main.js": "/qqmusicdownloader/static/js/main.12c915cf.js",
     "index.html": "/qqmusicdownloader/index.html",
-    "main.c482704d.css.map": "/qqmusicdownloader/static/css/main.c482704d.css.map",
-    "main.b7e6cb8e.js.map": "/qqmusicdownloader/static/js/main.b7e6cb8e.js.map"
+    "main.7dc8fd45.css.map": "/qqmusicdownloader/static/css/main.7dc8fd45.css.map",
+    "main.12c915cf.js.map": "/qqmusicdownloader/static/js/main.12c915cf.js.map"
   },
   "entrypoints": [
-    "static/css/main.c482704d.css",
-    "static/js/main.b7e6cb8e.js"
+    "static/css/main.7dc8fd45.css",
+    "static/js/main.12c915cf.js"
   ]
 }
