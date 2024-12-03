@@ -194,7 +194,12 @@ class QQMusicAPI:
                                 progress_label=None, pause_events=None) -> bool:
         """支持多重暂停控制的下载实现"""
         try:
-            ext = 'flac' if quality == 3 else 'm4a'
+            ext_mapping = {
+                1: 'm4a',    # 128kbps - m4a格式
+                2: 'mp3',    # 320kbps - mp3格式
+                3: 'flac'    # 无损 - flac格式
+            }
+            ext = ext_mapping.get(quality, 'm4a')
             filename = self._sanitize_filename(filename)
             file_path = self.music_dir / f"{filename}.{ext}"
             

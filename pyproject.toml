@@ -28,6 +28,9 @@ sources = [
 test_sources = [
     "tests",
 ]
+resources = [
+    "src/qq_music_downloader/resources",
+]
 
 requires = [
     "aiohttp>=3.8.0",      # 用于异步HTTP请求，是应用的核心网络组件
@@ -173,6 +176,7 @@ flatpak_sdk = "org.gnome.Sdk"
 requires = [
     "toga-winforms~=0.4.7",
 ]
+icon = "src/qq_music_downloader/resources"
 
 # Mobile deployments
 [tool.briefcase.app.qq_music_downloader.iOS]
