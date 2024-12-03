@@ -27,25 +27,118 @@
 1. 从 [Releases](https://github.com/YOUR_USERNAME/qq-music-downloader/releases) 页面获取最新版本
 2. 双击安装程序，轻松搞定！
 
+
 ### 源码安装
-如果你是极客玩家，也可以尝试从源码安装：
-- Python 3.8+ 
-- pip（Python 的贴心小助手）
+#### 环境要求
+
+在开始之前，请确保您的系统满足以下要求：
+
+- Python 3.8 或更高版本
+- pip（Python 包管理器）
+- Git（用于克隆代码仓库）
+
+您可以通过在终端运行以下命令检查 Python 版本：
+```bash
+python --version
+```
+
+#### 安装步骤
+
+#### 1. 克隆代码仓库
+
+首先，克隆项目代码到本地：
 
 ```bash
-# 克隆仓库到本地
 git clone https://github.com/yuqie6/qqmusicdownloader.git
 cd qqmusicdownloader
+```
 
-# 安装依赖（泡杯咖啡，这可能需要一会儿）
-pip install -r requirements.txt
+### 2. 设置开发环境
 
-# 启动应用
+建议使用虚拟环境来管理项目依赖。创建并激活虚拟环境：
+
+```bash
+# 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+```
+
+#### 3. 安装 Briefcase
+
+安装 Briefcase 工具，它将帮助我们管理项目依赖和运行应用：
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install briefcase
+```
+
+#### 4. 运行应用
+
+在开发模式下运行应用：
+
+```bash
 briefcase dev
 ```
 
+这个命令会自动完成以下工作：
+- 安装所有必要的依赖包
+- 配置开发环境
+- 启动应用程序
+
+### 常见问题解决
+
+#### 如果遇到依赖安装问题
+
+有时可能会遇到某些依赖包安装失败的情况。这种情况下，您可以尝试：
+
+1. 确保您的 pip 是最新版本：
+```bash
+python -m pip install --upgrade pip
+```
+
+2. 如果某个包安装失败，可以尝试单独安装：
+```bash
+python -m pip install 包名
+```
+
+#### 如果应用无法启动
+
+1. 检查是否已正确激活虚拟环境
+2. 确认 Python 版本是否满足要求
+3. 查看 `briefcase dev` 命令的错误输出
+
+### 开发者说明
+
+本项目使用 `pyproject.toml` 进行依赖管理，而不是传统的 requirements.txt。如果您需要添加新的依赖，请编辑 `pyproject.toml` 文件。
+
+
+
 ## 🎯 版本历史
 
+### 1.2.0 (03 Dec 2024)
+
+#### ✨ 新增功能
+* 新增了路径选择，方便用户自定义下载位置
+* 在选择格式时新增温馨提示，方便用户使用
+
+#### 💄 界面优化
+* 重新设计了界面布局，采用现代化的卡片式设计
+* 优化了按钮和控件的视觉效果
+* 新增了路径选择按钮，方便用户自定义下载位置
+* 把音质选择改为了文件格式选择，更加准确
+* 设计了单独的程序图标
+
+#### 🐛 修复问题
+* 修复了文件已存在时仍会下载
+* 修改了about信息
+#### ⚠️ 已知问题
+* 进度条还是有问题，作者能力有限
+* 多次搜索，搜索栏会遗留歌名，点击即可看见真实歌名
 ### 1.1.0 - 2024年12月2日
 - ✨ 重磅更新：支持批量下载功能
 - 🎮 新增下载暂停/继续控制

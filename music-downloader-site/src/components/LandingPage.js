@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, Music, Settings, Coffee, Github, AlertTriangle, Clock } from 'lucide-react';
 
-// Navbar component remains the same...
 const Navbar = () => (
   <nav className="fixed w-full top-0 bg-white/80 backdrop-blur-sm z-50 shadow-sm">
     <div className="container mx-auto px-4 py-3">
@@ -33,7 +32,6 @@ const Navbar = () => (
   </nav>
 );
 
-// FeatureCard component remains the same...
 const FeatureCard = ({ icon, title, description }) => (
   <div className="bg-white p-6 rounded-xl border border-gray-200 hover:shadow-lg transition-all duration-300 group">
     <div className="text-blue-600 mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -48,7 +46,6 @@ const FeatureCard = ({ icon, title, description }) => (
   </div>
 );
 
-// New simplified LegalWarning component
 const LegalWarning = () => (
   <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-8 rounded">
     <div className="flex items-center">
@@ -61,9 +58,46 @@ const LegalWarning = () => (
   </div>
 );
 
-// New Changelog component
 const Changelog = () => {
   const versions = [
+    {
+      version: 'v1.2.0',
+      date: '2024-12-03',
+      type: '功能更新',
+      features: [
+        {
+          title: '✨ 新增功能',
+          changes: [
+            '📁 新增了路径选择，方便用户自定义下载位置',
+            '💡 在选择格式时新增温馨提示，方便用户使用'
+          ]
+        },
+        {
+          title: '💄 界面优化',
+          changes: [
+            '🎨 重新设计了界面布局，采用现代化的卡片式设计',
+            '✨ 优化了按钮和控件的视觉效果',
+            '📁 新增了路径选择按钮，方便用户自定义下载位置',
+            '🔄 把音质选择改为了文件格式选择，更加准确',
+            '🎯 设计了单独的程序图标'
+          ]
+        },
+        {
+          title: '🐛 修复问题',
+          changes: [
+            '修复了文件已存在时仍会下载',
+            '修改了about信息'
+          ]
+        },
+        {
+          title: '⚠️ 已知问题',
+          changes: [
+            '进度条还是有问题，作者能力有限',
+            '多次搜索，搜索栏会遗留歌名，点击即可看见真实歌名'
+          ]
+        }
+      ]
+    },
     {
       version: 'v1.1.0',
       date: '2024-12-02',
@@ -145,12 +179,13 @@ const Changelog = () => {
   );
 };
 
-// Updated DownloadButton component with version selection
 const DownloadButton = ({ className = '', version }) => {
   const [selectedVersion, setSelectedVersion] = useState(version);
 
   const getDownloadLink = (ver) => {
     switch (ver) {
+      case 'v1.2.0':
+        return 'https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.2.0';
       case 'v1.1.0':
         return 'https://github.com/yuqie6/qqmusicdownloader/releases/tag/v1.1.0';
       case 'v1.0.0':
@@ -170,7 +205,8 @@ const DownloadButton = ({ className = '', version }) => {
           value={selectedVersion}
           onChange={(e) => setSelectedVersion(e.target.value)}
         >
-          <option value="v1.1.0">v1.1.0 - 最新版本</option>
+          <option value="v1.2.0">v1.2.0 - 最新版本</option>
+          <option value="v1.1.0">v1.1.0 - 稳定版 </option>
           <option value="v1.0.0">v1.0.0 - 初始版本</option>
         </select>
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
@@ -194,15 +230,13 @@ const DownloadButton = ({ className = '', version }) => {
   );
 };
 
-// Main LandingPage component
 const LandingPage = () => {
-  const [selectedVersion] = useState('v1.1.0'); // 默认选择最新版本
+  const [selectedVersion] = useState('v1.2.0');
 
   return (
     <div className="min-h-screen">
       <Navbar />
       
-      {/* Hero Section */}
       <div className="relative pt-16">
         <div className="bg-gradient-to-br from-blue-600 to-purple-600">
           <div className="container mx-auto px-4 py-24">
@@ -219,7 +253,6 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Features Section */}
       <div className="py-20 bg-gray-50">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
@@ -245,7 +278,6 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Download Section with Legal Warning */}
       <div id="download" className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
@@ -259,14 +291,12 @@ const LandingPage = () => {
             <DownloadButton version={selectedVersion} />
           </div>
           
-          {/* Changelog Section */}
           <div className="mt-16">
             <Changelog />
           </div>
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="bg-gray-800 text-white py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
@@ -285,7 +315,7 @@ const LandingPage = () => {
                   <Link 
                     to="/guide" 
                     className="text-gray-400 hover:text-white transition-colors"
-                  >
+                    >
                     使用教程
                   </Link>
                   <Link 

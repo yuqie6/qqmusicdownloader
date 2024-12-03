@@ -18,7 +18,7 @@ class QQMusicDownloaderApp(toga.App):
         formal_name = '极简音乐下载器'
         app_id = 'com.yuqie.qqmusicdownloader'
         author = 'yuqie6'
-        version = '1.1.1'
+        version = '1.2.0'
         description = '一款可以下载QQ音乐里面的歌曲的软件'
 
         super().__init__(

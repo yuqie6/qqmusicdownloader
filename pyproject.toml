@@ -2,7 +2,7 @@
 [tool.briefcase]
 project_name = "QQmusicDownloader"
 bundle = "com.yuqie.qqmusicdownloader"
-version = "1.1.1"
+version = "1.2.0"
 url = "https://yuqie6.github.io/qqmusicdownloader"
 license.file = "LICENSE"
 author = "yuqie6"
