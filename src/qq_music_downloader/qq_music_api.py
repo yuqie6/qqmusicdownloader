@@ -198,6 +198,14 @@ class QQMusicAPI:
             filename = self._sanitize_filename(filename)
             file_path = self.music_dir / f"{filename}.{ext}"
             
+            if file_path.exists():
+                logger.info(f"文件已存在: {filename}.{ext}")
+                if progress_label:
+                    progress_label.text = f'文件已存在: {filename}.{ext}'
+                return True
+                
+            logger.info(f"开始下载文件: {filename}.{ext}")
+            
             logger.info(f"开始下载文件: {filename}.{ext}")
             
             async with aiohttp.ClientSession() as session:
@@ -211,6 +219,8 @@ class QQMusicAPI:
 
                     temp_path = file_path.with_suffix('.tmp')
                     downloaded = 0
+                    if progress_bar:
+                        progress_bar.value = 0
                     start_time = datetime.now()
                     last_progress_update = datetime.now()
 

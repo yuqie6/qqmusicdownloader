@@ -15,7 +15,22 @@ logger = logging.getLogger(__name__)
 
 class QQMusicDownloaderApp(toga.App):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        formal_name = '极简音乐下载器'
+        app_id = 'com.yuqie.qqmusicdownloader'
+        author = 'yuqie6'
+        version = '1.1.1'
+        description = '一款可以下载QQ音乐里面的歌曲的软件'
+
+        super().__init__(
+            formal_name=formal_name,
+            app_id=app_id,
+            author=author,
+            version=version,
+            description=description,
+            *args, 
+            **kwargs
+        )
+        
         # 初始化基本属性
         self.downloader = None
         self.download_tasks = []
@@ -190,23 +205,31 @@ class QQMusicDownloaderApp(toga.App):
             logger.error(f"处理选择时出错：{str(e)}")
 
     def _get_selected_quality(self):
-        """获取选择的音质"""
+        """获取选择的格式对应的质量值"""
         try:
-            quality_text = self.ui.quality_selection.value
-            quality_map = {
-                '标准品质 (128kbps)': 1,
-                '高品质 (320kbps)': 2,
-                '无损品质 (FLAC)': 3
+            format_text = self.ui.format_selection.value
+            format_map = {
+                'M4A': 1,   # 基础音质
+                'MP3': 2,   # 实际上可能还是会得到m4a
+                'FLAC': 3   # 实际上可能还是会得到m4a
             }
-            quality = quality_map.get(quality_text, 1)
-            logger.info(f"选择的音质: {quality_text} ({quality})")
+            quality = format_map.get(format_text, 2)  # 默认使用M4A
+            logger.info(f"选择的格式: {format_text} (quality={quality})")
             return quality
         except Exception as e:
-            logger.error(f"获取音质选择失败: {e}")
-            return 1
-
+            logger.error(f"获取格式选择失败: {e}")
+            return 2  # 出错时默认使用M4A
+  
     async def start_download(self, widget):
         """下载处理入口"""
+        if self.ui.format_selection.value in ['MP3', 'FLAC']:
+            await self.main_window.dialog(
+                toga.InfoDialog(
+                    '温馨提示', 
+                    '由于QQ音乐API限制，实际下载文件可能为M4A格式。\n'
+                )
+            )
+       
         try:
             self.ui.pause_button.enabled = True
             
@@ -302,10 +325,53 @@ class QQMusicDownloaderApp(toga.App):
         except Exception as e:
             logger.error(f"切换暂停状态失败: {e}")
 
+    async def choose_download_path(self, widget):
+        """处理下载路径选择 - 这次用对了方法！"""
+        try:
+            # Toga正确的文件夹选择方法
+            path_dialog = await self.main_window.select_folder_dialog(
+                "选择下载目录"
+            )
+            
+            if path_dialog:  # 用户选择了路径而不是像我逃避做家务一样按取消
+                new_path = Path(path_dialog)
+                
+                # 确保选择的路径存在（就像确保我的咖啡杯里确实有咖啡一样重要）
+                new_path.mkdir(parents=True, exist_ok=True)
+                
+                # 更新下载器的路径
+                if self.downloader:
+                    self.downloader.api.base_dir = new_path
+                    self.downloader.api.music_dir = new_path / 'Music'
+                    self.downloader.api.lyrics_dir = new_path / 'Lyrics'
+                    
+                    # 创建子目录（像建造音乐的小城堡）
+                    self.downloader.api.music_dir.mkdir(exist_ok=True)
+                    self.downloader.api.lyrics_dir.mkdir(exist_ok=True)
+                    
+                    # 更新UI显示
+                    self.ui.set_path_label(f'下载路径：{new_path}')
+                    
+                    await self.main_window.info_dialog(
+                        '成功',
+                        f'下载路径已更新为：\n{new_path}'
+                    )
+                else:
+                    await self.main_window.info_dialog(
+                        '提示',
+                        '请先设置Cookie后再选择下载路径'
+                    )
+        
+        except Exception as e:
+            logger.error(f"选择下载路径时出错: {e}")
+            await self.main_window.error_dialog(
+                '错误',
+                f'设置下载路径失败: {str(e)}'
+            )
+            
 def main():
     """程序入口点"""
-    return QQMusicDownloaderApp('极简音乐下载器',
-                              'https://yuqie6.github.io/qqmusicdownloader')
+    return QQMusicDownloaderApp()
 
 if __name__ == '__main__':
     app = main()

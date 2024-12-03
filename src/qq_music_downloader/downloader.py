@@ -234,84 +234,92 @@ class QQMusicDownloader:
                             progress_bar=None, status_label=None) -> bool:
         async with self.download_lock:
             try:
-                logger.info(f"开始批量下载，选中歌曲索引: {song_indices}")
-                self.is_downloading = True
                 total_songs = len(song_indices)
                 completed_songs = 0
-                failed_songs = []
-
-                # 初始化进度条
+                
+                # 重置进度条
                 if progress_bar:
                     progress_bar.value = 0
+                    
+                for current_index, index in enumerate(song_indices, 1):
+                    logger.info(f"开始批量下载，选中歌曲索引: {song_indices}")
+                    self.is_downloading = True
+                    total_songs = len(song_indices)
+                    completed_songs = 0
+                    failed_songs = []
 
-                # 对每首歌进行下载
-                for current_index, index in enumerate(song_indices, 1):  # 使用enumerate从1开始计数
-                    try:
-                        song = self.current_songs[index]
-                        song_name = f"{song['name']} - {song['singer']}"
-                        
-                        # 更新状态标签，显示当前正在下载第几首歌
-                        if status_label:
-                            status_label.text = f'下载中 ({current_index}/{total_songs}): {song_name}'
-                        
-                        # 获取下载URL
-                        song_url = await self.api.get_song_url(song['songmid'], quality)
-                        if not song_url:
+                    # 初始化进度条
+                    if progress_bar:
+                        progress_bar.value = 0
+
+                    # 对每首歌进行下载
+                    for current_index, index in enumerate(song_indices, 1):  # 使用enumerate从1开始计数
+                        try:
+                            song = self.current_songs[index]
+                            song_name = f"{song['name']} - {song['singer']}"
+                            
+                            # 更新状态标签，显示当前正在下载第几首歌
+                            if status_label:
+                                status_label.text = f'下载中 ({current_index}/{total_songs}): {song_name}'
+                            
+                            # 获取下载URL
+                            song_url = await self.api.get_song_url(song['songmid'], quality)
+                            if not song_url:
+                                failed_songs.append(song_name)
+                                continue
+
+                            # 创建下载任务
+                            task = DownloadTask(song, quality)
+                            self.download_tasks[index] = task
+                            
+                            # 执行下载，传入正确的进度信息
+                            success = await self.api.download_with_lyrics(
+                                song_url,
+                                task.progress.filename,
+                                quality,
+                                song['songmid'],
+                                progress_bar,
+                                status_label,
+                                [self.global_pause_event, task.pause_event]
+                            )
+
+                            if success:
+                                completed_songs += 1
+                                # 更新总体进度
+                                if progress_bar:
+                                    progress_bar.value = (completed_songs / total_songs) * 100
+                                # 回调通知进度
+                                if progress_callback:
+                                    progress_callback(f'已完成 ({completed_songs}/{total_songs}): {song_name}')
+                            else:
+                                failed_songs.append(song_name)
+
+                        except Exception as e:
+                            logger.error(f"下载歌曲时出错: {str(e)}")
                             failed_songs.append(song_name)
-                            continue
 
-                        # 创建下载任务
-                        task = DownloadTask(song, quality)
-                        self.download_tasks[index] = task
-                        
-                        # 执行下载，传入正确的进度信息
-                        success = await self.api.download_with_lyrics(
-                            song_url,
-                            task.progress.filename,
-                            quality,
-                            song['songmid'],
-                            progress_bar,
-                            status_label,
-                            [self.global_pause_event, task.pause_event]
+                    # 显示最终结果
+                    if failed_songs:
+                        failed_str = '\n'.join(failed_songs)
+                        await window.dialog(
+                            toga.InfoDialog(
+                                '下载完成',
+                                f'完成 {completed_songs}/{total_songs} 首\n'
+                                f'失败 {len(failed_songs)} 首：\n{failed_str}'
+                            )
+                        )
+                    else:
+                        await window.dialog(
+                            toga.InfoDialog('完成', f'全部 {total_songs} 首歌曲下载完成')
                         )
 
-                        if success:
-                            completed_songs += 1
-                            # 更新总体进度
-                            if progress_bar:
-                                progress_bar.value = (completed_songs / total_songs) * 100
-                            # 回调通知进度
-                            if progress_callback:
-                                progress_callback(f'已完成 ({completed_songs}/{total_songs}): {song_name}')
-                        else:
-                            failed_songs.append(song_name)
-
-                    except Exception as e:
-                        logger.error(f"下载歌曲时出错: {str(e)}")
-                        failed_songs.append(song_name)
-
-                # 显示最终结果
-                if failed_songs:
-                    failed_str = '\n'.join(failed_songs)
-                    await window.dialog(
-                        toga.InfoDialog(
-                            '下载完成',
-                            f'完成 {completed_songs}/{total_songs} 首\n'
-                            f'失败 {len(failed_songs)} 首：\n{failed_str}'
-                        )
-                    )
-                else:
-                    await window.dialog(
-                        toga.InfoDialog('完成', f'全部 {total_songs} 首歌曲下载完成')
-                    )
-
-                return completed_songs == total_songs
+                    return completed_songs == total_songs
 
             except Exception as e:
-                logger.error(f"批量下载过程中出错: {str(e)}")
-                if status_label:
-                    status_label.text = f'下载出错: {str(e)}'
-                return False
+                    logger.error(f"批量下载过程中出错: {str(e)}")
+                    if status_label:
+                        status_label.text = f'下载出错: {str(e)}'
+                    return False
 
             finally:
                 self.is_downloading = False
