@@ -122,7 +122,7 @@ class QQMusicDownloaderUI:
         ))
 
         title = toga.Label(
-            'QQ音乐下载器',
+            '极简音乐下载器',
             style=Pack(
                 font_size=20,
                 font_weight='bold',
