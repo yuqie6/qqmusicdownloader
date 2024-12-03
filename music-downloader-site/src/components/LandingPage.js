@@ -1,45 +1,99 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Music, Settings, Coffee, Github, AlertTriangle, Clock } from 'lucide-react';
+import { Download, Music, Settings, Coffee, Github, AlertTriangle, Clock,Menu, X } from 'lucide-react';
 
-const Navbar = () => (
-  <nav className="fixed w-full top-0 bg-white/80 backdrop-blur-sm z-50 shadow-sm">
-    <div className="container mx-auto px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Music className="w-6 h-6 text-blue-600" />
-          <span className="text-lg font-bold text-gray-800">极简音乐下载器</span>
+const Navbar = () => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const navLinks = [
+    { to: "/guide", text: "使用教程" },
+    { to: "/faq", text: "常见问题" },
+    { to: "/contact", text: "联系我们" },
+  ];
+
+  return (
+    <nav className="fixed w-full top-0 bg-white/80 backdrop-blur-sm z-50 shadow-sm">
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Music className="w-6 h-6 text-blue-600" />
+            <span className="text-lg font-bold text-gray-800">极简音乐下载器</span>
+          </div>
+          
+          {/* Mobile menu button */}
+          <button 
+            className="md:hidden"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+
+          {/* Desktop navigation */}
+          <div className="hidden md:flex items-center gap-6">
+            {navLinks.map(link => (
+              <Link 
+                key={link.to}
+                to={link.to} 
+                className="text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                {link.text}
+              </Link>
+            ))}
+            <a 
+              href="https://github.com/yuqie6/qqmusicdownloader" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              <Github className="w-5 h-5" />
+              <span>GitHub</span>
+            </a>
+            <a 
+              href="#download"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Download className="w-5 h-5 inline mr-1" />
+              下载
+            </a>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-        <Link to="/guide" className="text-gray-600 hover:text-blue-600 transition-colors">
-            使用教程
-          </Link>
-          <Link to="/faq" className="text-gray-600 hover:text-blue-600 transition-colors">
-            常见问题
-          </Link>
-          <Link to="/contact" className="text-gray-600 hover:text-blue-600 transition-colors">
-            联系我们
-          </Link>
-          <a 
-            href="https://github.com/yuqie6/qqmusicdownloader" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors"
-          >
-            <Github className="w-5 h-5" />
-            <span>GitHub</span>
-          </a>
-          <a 
-            href="#download"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            下载
-          </a>
+
+        {/* Mobile navigation */}
+        <div className={`md:hidden ${isOpen ? 'block' : 'hidden'} pt-4`}>
+          <div className="flex flex-col gap-4">
+            {navLinks.map(link => (
+              <Link 
+                key={link.to}
+                to={link.to} 
+                className="text-gray-600 hover:text-blue-600 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                {link.text}
+              </Link>
+            ))}
+            <a 
+              href="https://github.com/yuqie6/qqmusicdownloader" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              <Github className="w-5 h-5" />
+              <span>GitHub</span>
+            </a>
+            <a 
+              href="#download"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center"
+            >
+              <Download className="w-5 h-5 mr-1" />
+              下载
+            </a>
+          </div>
         </div>
       </div>
-    </div>
-  </nav>
-);
+    </nav>
+  );
+};
+
 
 const FeatureCard = ({ icon, title, description }) => (
   <div className="bg-white p-6 rounded-xl border border-gray-200 hover:shadow-lg transition-all duration-300 group">
