@@ -11,6 +11,15 @@ const Navbar = () => (
           <span className="text-lg font-bold text-gray-800">极简音乐下载器</span>
         </div>
         <div className="flex items-center gap-4">
+        <Link to="/guide" className="text-gray-600 hover:text-blue-600 transition-colors">
+            使用教程
+          </Link>
+          <Link to="/faq" className="text-gray-600 hover:text-blue-600 transition-colors">
+            常见问题
+          </Link>
+          <Link to="/contact" className="text-gray-600 hover:text-blue-600 transition-colors">
+            联系我们
+          </Link>
           <a 
             href="https://github.com/yuqie6/qqmusicdownloader" 
             target="_blank" 
@@ -309,29 +318,7 @@ const LandingPage = () => {
                   不得用于商业用途。作者创作初衷仅为学习交流，请遵守相关法律法规。
                 </p>
               </div>
-              <div className="md:text-right">
-                <h3 className="text-lg font-semibold mb-4">快速链接</h3>
-                <div className="flex flex-col md:items-end gap-2">
-                  <Link 
-                    to="/guide" 
-                    className="text-gray-400 hover:text-white transition-colors"
-                    >
-                    使用教程
-                  </Link>
-                  <Link 
-                    to="/faq" 
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    常见问题
-                  </Link>
-                  <Link 
-                    to="/contact" 
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    联系我们
-                  </Link>
-                </div>
-              </div>
+              
             </div>
             <div className="border-t border-gray-700 mt-8 pt-8 text-center">
               <p className="text-gray-400">© 2024 极简音乐下载器. All rights reserved.</p>
