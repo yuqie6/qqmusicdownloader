@@ -35,6 +35,8 @@ Temporary Items
 env/
 .venv/
 qqmusic_env/
+.python-version
+node_modules/
 build/
 develop-eggs/
 dist/
@@ -64,6 +66,11 @@ var/
 logs/
 
 cURL
+
+# Python tooling caches
+.ruff_cache/
+.pytest_cache/
+uv.lock
 
 # 敏感信息和配置文件
 *.cookie
