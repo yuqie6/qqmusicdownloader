@@ -33,6 +33,8 @@ Temporary Items
 # Distribution / packaging
 .Python
 env/
+.venv/
+qqmusic_env/
 build/
 develop-eggs/
 dist/
@@ -60,3 +62,27 @@ var/
 
 # Briefcase log files
 logs/
+
+cURL
+
+# 敏感信息和配置文件
+*.cookie
+*.txt
+config/
+secrets/
+.env
+.env.local
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+
+# API 探测和调试文件
+docs/research/
+*.bin
+*response*
+
+docs
+AGENTS.md
+CLAUDE.md
