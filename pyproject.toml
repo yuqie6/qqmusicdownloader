@@ -1,204 +1,28 @@
-# This project was generated with 0.3.20 using template: https://github.com/beeware/briefcase-template@v0.3.20
+[project]
+name = "qqmusicdownloader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "aiohttp>=3.12.15",
+    "pytest>=8.4.2",
+    "ruff>=0.13.1",
+    "toga>=0.5.2",
+]
+
 [tool.briefcase]
-project_name = "QQmusicDownloader"
-bundle = "com.yuqie.qqmusicdownloader"
-version = "1.2.0"
-url = "https://yuqie6.github.io/qqmusicdownloader"
-license.file = "LICENSE"
+project_name = "QQ Music Downloader"
+bundle = "com.yuqie"
 author = "yuqie6"
-author_email = "2140353088@qq.com"
+version = "1.2.0"
 
 [tool.briefcase.app.qq_music_downloader]
 formal_name = "极简音乐下载器"
-description = "一款便捷的QQ音乐歌曲下载工具，支持高品质音乐下载"
-long_description = """极简音乐下载器是一款专注于音乐下载的桌面工具软件，具有以下特点：
-
-1. 简单易用：清晰的界面设计，操作直观
-2. 下载高效：支持异步下载，更快更稳定
-3. 多格式支持：可选择不同的格式（音质选择目前有bug，作者能力有限）
-4. 批量处理：支持多首歌曲同时下载（完善中）
-5. 使用该软件须有vip账号
-
-注意：本软件仅供个人学习研究使用，请勿用于商业用途。
-请遵守相关法律法规，尊重音乐版权。
-"""
-sources = [
-    "src/qq_music_downloader",
-]
-test_sources = [
-    "tests",
-]
-resources = [
-    "src/qq_music_downloader/resources",
-]
-
-requires = [
-    "aiohttp>=3.8.0",      # 用于异步HTTP请求，是应用的核心网络组件
-    "aiosignal>=1.3.1",    # 为aiohttp提供信号处理支持
-    "async-timeout>=4.0.3", # 处理异步操作的超时控制
-    "attrs>=23.1.0",       # 提供类属性管理功能
-    "charset-normalizer>=3.3.2", # 处理字符编码转换，对中文支持很重要
-    "frozenlist>=1.4.0",   # 提供不可变列表实现
-    "multidict>=6.0.4",    # 支持一个键对应多个值的字典结构
-    "yarl>=1.9.3",         # 提供URL解析和处理功能
-    "idna>=3.6",           # 用于国际化域名和URL的处理
-    "packaging>=23.2",     # 处理Python包的版本和依赖关系
-    "aiofiles>=23.1.0",    # 提供异步文件操作支持，用于高效的文件下载
-]
-
-test_requires = [
-    "pytest",
-]
-
-[tool.briefcase.app.qq_music_downloader.macOS]
-universal_build = true
-requires = [
-    "toga-cocoa~=0.4.7",
-    "std-nslog~=1.0.3",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux]
-requires = [
-    "toga-gtk~=0.4.7",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.system.debian]
-system_requires = [
-    # Needed to compile pycairo wheel
-    "libcairo2-dev",
-    # Needed to compile PyGObject wheel
-    "libgirepository1.0-dev",
-]
-
-system_runtime_requires = [
-    # Needed to provide GTK and its GI bindings
-    "gir1.2-gtk-3.0",
-    "libgirepository-1.0-1",
-    # Dependencies that GTK looks for at runtime
-    "libcanberra-gtk3-module",
-    # Needed to provide WebKit2 at runtime
-    # Note: Debian 11 and Ubuntu 20.04 require gir1.2-webkit2-4.0 instead
-    # "gir1.2-webkit2-4.1",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.system.rhel]
-system_requires = [
-    # Needed to compile pycairo wheel
-    "cairo-gobject-devel",
-    # Needed to compile PyGObject wheel
-    "gobject-introspection-devel",
-]
-
-system_runtime_requires = [
-    # Needed to support Python bindings to GTK
-    "gobject-introspection",
-    # Needed to provide GTK
-    "gtk3",
-    # Dependencies that GTK looks for at runtime
-    "libcanberra-gtk3",
-    # Needed to provide WebKit2 at runtime
-    # "webkit2gtk3",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.system.suse]
-system_requires = [
-    # Needed to compile pycairo wheel
-    "cairo-devel",
-    # Needed to compile PyGObject wheel
-    "gobject-introspection-devel",
-]
-
-system_runtime_requires = [
-    # Needed to provide GTK
-    "gtk3",
-    # Needed to support Python bindings to GTK
-    "gobject-introspection", "typelib(Gtk) = 3.0",
-    # Dependencies that GTK looks for at runtime
-    "libcanberra-gtk3-module",
-    # Needed to provide WebKit2 at runtime
-    # "libwebkit2gtk3", "typelib(WebKit2)",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.system.arch]
-system_requires = [
-    # Needed to compile pycairo wheel
-    "cairo",
-    # Needed to compile PyGObject wheel
-    "gobject-introspection",
-    # Runtime dependencies that need to exist so that the
-    # Arch package passes final validation.
-    # Needed to provide GTK
-    "gtk3",
-    # Dependencies that GTK looks for at runtime
-    "libcanberra",
-    # Needed to provide WebKit2
-    # "webkit2gtk",
-]
-
-system_runtime_requires = [
-    # Needed to provide GTK
-    "gtk3",
-    # Needed to provide PyGObject bindings
-    "gobject-introspection-runtime",
-    # Dependencies that GTK looks for at runtime
-    "libcanberra",
-    # Needed to provide WebKit2 at runtime
-    # "webkit2gtk",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.appimage]
-manylinux = "manylinux_2_28"
-
-system_requires = [
-    # Needed to compile pycairo wheel
-    "cairo-gobject-devel",
-    # Needed to compile PyGObject wheel
-    "gobject-introspection-devel",
-    # Needed to provide GTK
-    "gtk3-devel",
-    # Dependencies that GTK looks for at runtime, that need to be
-    # in the build environment to be picked up by linuxdeploy
-    "libcanberra-gtk3",
-    "PackageKit-gtk3-module",
-    "gvfs-client",
-]
-
-linuxdeploy_plugins = [
-    "DEPLOY_GTK_VERSION=3 gtk",
-]
-
-[tool.briefcase.app.qq_music_downloader.linux.flatpak]
-flatpak_runtime = "org.gnome.Platform"
-flatpak_runtime_version = "47"
-flatpak_sdk = "org.gnome.Sdk"
-
-[tool.briefcase.app.qq_music_downloader.windows]
-requires = [
-    "toga-winforms~=0.4.7",
-]
-icon = "src/qq_music_downloader/resources"
-
-# Mobile deployments
-[tool.briefcase.app.qq_music_downloader.iOS]
-requires = [
-    "toga-iOS~=0.4.7",
-    "std-nslog~=1.0.3",
-]
-
-[tool.briefcase.app.qq_music_downloader.android]
-requires = [
-    "toga-android~=0.4.7",
-]
-
-base_theme = "Theme.MaterialComponents.Light.DarkActionBar"
-
-build_gradle_dependencies = [
-    "com.google.android.material:material:1.12.0",
-]
-
-# Web deployments
-[tool.briefcase.app.qq_music_downloader.web]
-requires = [
-    "toga-web~=0.4.7",
-]
-style_framework = "Shoelace v2.3"
+description = "一款可以下载QQ音乐里面的歌曲的软件"
+license = { file = "LICENSE" }
+module = "qq_music_downloader"
+sources = ["src/qq_music_downloader"]
+requires = []
+icon = "src/qq_music_downloader/resources/app-icon"
