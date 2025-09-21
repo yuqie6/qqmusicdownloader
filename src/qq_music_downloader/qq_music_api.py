@@ -4,13 +4,22 @@ import json
 import logging
 import random
 from pathlib import Path
-import asyncio
 import aiofiles
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import base64
 import re
 from dataclasses import dataclass
 from datetime import datetime
+import time
+
+try:
+    from .crypto_bridge import (
+        NodeCryptoError,
+        decrypt_response,
+        encrypt_payload,
+    )
+except ImportError:  # pragma: no cover - 兼容独立脚本导入
+    from crypto_bridge import NodeCryptoError, decrypt_response, encrypt_payload
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +41,9 @@ class QQMusicAPI:
     def __init__(self, cookie: str):
         self.cookie = self._clean_cookie(cookie)
         self.config = APIConfig()
+        raw_uin = self._extract_cookie_value("uin") or "0"
+        self._uin = self._normalize_uin(raw_uin)
+        self._g_tk = self._calculate_g_tk()
         self._setup_headers()
         self._setup_directories()
         self._setup_session()
@@ -48,6 +60,126 @@ class QQMusicAPI:
             "Origin": "https://y.qq.com",
         }
 
+    def _extract_cookie_value(self, key: str) -> str:
+        """从 Cookie 中提取特定键值."""
+
+        match = re.search(rf"{key}=([^;]+)", self.cookie)
+        return match.group(1) if match else ""
+
+    def _normalize_uin(self, raw_uin: str) -> str:
+        """将 Cookie 中的 uin 转换为纯数字.
+
+        Args:
+            raw_uin (str): Cookie 中原始的 uin 值。
+
+        Returns:
+            str: 去除前缀后的纯数字 uin，若无法解析则返回 "0"。
+        """
+
+        if not raw_uin:
+            return "0"
+        cleaned = raw_uin.lstrip("oO")
+        if cleaned.isdigit():
+            return cleaned
+        match = re.search(r"(\d+)", raw_uin)
+        if match:
+            return match.group(1)
+        return "0"
+
+    def _calculate_g_tk(self) -> int:
+        """根据 skey/qqmusic_key 计算 g_tk."""
+
+        for candidate in [
+            "qqmusic_key",
+            "p_skey",
+            "skey",
+            "p_lskey",
+            "lskey",
+        ]:
+            token = self._extract_cookie_value(candidate)
+            if token:
+                break
+        else:
+            token = ""
+
+        hash_val = 5381
+        for ch in token:
+            hash_val += (hash_val << 5) + ord(ch)
+        return hash_val & 0x7FFFFFFF
+
+    def _generate_guid(self) -> str:
+        """生成 GUID."""
+
+        return str(random.randint(1000000000, 9999999999))
+
+    def _build_comm(self, *, guid: Optional[str] = None) -> Dict[str, Any]:
+        """构造通用 comm 字段."""
+
+        comm: Dict[str, Any] = {
+            "ct": 24,
+            "cv": 0,
+            "format": "json",
+            "uin": self._uin,
+            "platform": "yqq.json",
+            "g_tk_new_20200303": self._g_tk,
+            "g_tk": self._g_tk,
+            "needNewCode": 0,
+        }
+        if guid:
+            comm["guid"] = guid
+        return comm
+
+    async def _call_musics(
+        self,
+        payload: Dict[str, Any],
+        *,
+        encoding: str = "ag-1",
+    ) -> Optional[Dict[str, Any]]:
+        """调用 musics.fcg 并解密响应."""
+
+        plain = json.dumps(payload, ensure_ascii=False)
+        try:
+            body, sign_value = encrypt_payload(plain)
+        except NodeCryptoError as exc:
+            logger.error("musics.fcg 加密失败: %s", exc)
+            return None
+
+        params = {
+            "_": str(int(time.time() * 1000)),
+            "encoding": encoding,
+            "sign": sign_value,
+        }
+        headers = self._build_musics_headers()
+        url = "https://u6.y.qq.com/cgi-bin/musics.fcg"
+
+        try:
+            async with aiohttp.ClientSession(
+                headers=headers,
+                timeout=self.timeout,
+                trust_env=True,
+            ) as session:
+                async with session.post(url, params=params, data=body) as resp:
+                    resp.raise_for_status()
+                    raw = await resp.read()
+        except Exception as exc:  # pragma: no cover - 网络波动
+            logger.error("musics.fcg 请求失败: %s", exc)
+            return None
+
+        try:
+            text, parsed = decrypt_response(raw)
+        except NodeCryptoError as exc:
+            logger.error("musics.fcg 解密失败: %s", exc)
+            return None
+
+        if parsed is None:
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                logger.error("musics.fcg 响应无法解析为 JSON")
+                return None
+
+        return parsed
+
     async def validate_cookie(self) -> bool:
         """验证Cookie是否有效
 
@@ -57,33 +189,26 @@ class QQMusicAPI:
             bool: Cookie有效返回True，否则返回False
         """
         try:
-            # 使用搜索接口来验证Cookie，搜索一个通用词，比如"音乐"
-            url = "https://u.y.qq.com/cgi-bin/musicu.fcg"
-            params = {
-                "format": "json",
-                "data": json.dumps(
-                    {
-                        "comm": {"ct": 24, "cv": 0},
-                        "search": {
-                            "method": "DoSearchForQQMusicDesktop",
-                            "module": "music.search.SearchCgiService",
-                            "param": {
-                                "query": "音乐",
-                                "num_per_page": 1,
-                                "page_num": 1,
-                            },
-                        },
-                    }
-                ),
+            payload = {
+                "comm": self._build_comm(guid=self._generate_guid()),
+                "req_1": {
+                    "module": "music.search.SearchCgiService",
+                    "method": "DoSearchForQQMusicDesktop",
+                    "param": {
+                        "query": "音乐",
+                        "num_per_page": 1,
+                        "page_num": 1,
+                        "search_type": 0,
+                    },
+                },
             }
 
-            response = await self._make_request(url, params)
+            result = await self._call_musics(payload)
+            if not result:
+                return False
 
-            # 检查响应中是否包含错误信息
-            if response and "code" in response.get("search", {}).get("data", {}):
-                return response["search"]["data"]["code"] == 0
-
-            return False
+            req_data = result.get("req_1", {})
+            return req_data.get("code") == 0
 
         except Exception as e:
             logger.error(f"Cookie验证失败: {e}")
@@ -101,32 +226,36 @@ class QQMusicAPI:
             List[Dict]: 歌曲信息列表，每个字典包含歌曲详细信息
         """
         try:
-            url = "https://u.y.qq.com/cgi-bin/musicu.fcg"
-            params = {
-                "format": "json",
-                "data": json.dumps(
-                    {
-                        "comm": {"ct": 24, "cv": 0},
-                        "search": {
-                            "method": "DoSearchForQQMusicDesktop",
-                            "module": "music.search.SearchCgiService",
-                            "param": {
-                                "query": keyword,
-                                "num_per_page": 20,  # 每页返回20首歌曲
-                                "page_num": 1,
-                            },
-                        },
-                    }
-                ),
+            payload = {
+                "comm": self._build_comm(guid=self._generate_guid()),
+                "req_1": {
+                    "module": "music.search.SearchCgiService",
+                    "method": "DoSearchForQQMusicDesktop",
+                    "param": {
+                        "query": keyword,
+                        "num_per_page": 20,
+                        "page_num": 1,
+                        "search_type": 0,
+                    },
+                },
             }
 
-            response = await self._make_request(url, params)
-
-            if not response or "search" not in response:
-                logger.error("搜索响应格式错误")
+            response = await self._call_musics(payload)
+            if not response:
+                logger.error("搜索请求失败: 未获取到响应")
                 return []
 
-            songs_data = response["search"]["data"]["body"]["song"]["list"]
+            search_block = response.get("req_1", {})
+            if search_block.get("code") != 0:
+                logger.error("搜索接口返回错误码: %s", search_block.get("code"))
+                return []
+
+            songs_data = (
+                search_block.get("data", {})
+                .get("body", {})
+                .get("song", {})
+                .get("list", [])
+            )
 
             # 整理歌曲信息为标准格式
             songs = []
@@ -140,6 +269,7 @@ class QQMusicAPI:
                         "singer": singer or "未知歌手",
                         "album": song.get("album", {}).get("title", "未知专辑"),
                         "songmid": song.get("mid", ""),  # 歌曲的唯一标识符
+                        "media_mid": song.get("file", {}).get("media_mid", ""),
                         "interval": song.get("interval", 0),  # 歌曲时长（秒）
                         "size": {  # 不同品质对应的文件大小
                             "128": song.get("file", {}).get("size_128mp3", 0),
@@ -175,34 +305,6 @@ class QQMusicAPI:
         """返回下载目录路径"""
         return str(self.base_dir)  # 返回基础目录的字符串表示
 
-    async def _make_request(
-        self,
-        url: str,
-        params: Optional[Dict] = None,
-        retry: int = 0,
-        headers: Optional[Dict] = None,
-    ) -> Dict:
-        """发送HTTP请求并处理响应"""
-        try:
-            request_headers = headers if headers is not None else self.headers
-            async with aiohttp.ClientSession(
-                headers=request_headers, timeout=self.timeout
-            ) as session:
-                async with session.get(url, params=params) as response:
-                    response.raise_for_status()
-                    text = await response.text()
-                    # 处理JSONP响应
-                    if text.startswith(
-                        ("callback(", "MusicJsonCallback(", "jsonCallback(")
-                    ):
-                        text = text[text.find("(") + 1 : text.rfind(")")]
-                    return json.loads(text)
-        except Exception:
-            if retry < self.config.retry_times:
-                await asyncio.sleep(self.config.retry_delay)
-                return await self._make_request(url, params, retry + 1, headers)
-            raise
-
     async def download_with_lyrics(
         self,
         url: str,
@@ -234,13 +336,19 @@ class QQMusicAPI:
 
             logger.info(f"开始下载文件: {filename}.{ext}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers) as response:
+            async with aiohttp.ClientSession(
+                headers=self.headers,
+                timeout=self.timeout,
+                trust_env=True,
+            ) as session:
+                async with session.get(url) as response:
                     if response.status != 200:
+                        logger.error("下载请求失败: HTTP %s", response.status)
                         return False
 
                     total_size = int(response.headers.get("content-length", 0))
                     if total_size == 0:
+                        logger.error("下载请求缺少 content-length，可能被权限限制")
                         return False
 
                     temp_path = file_path.with_suffix(".tmp")
@@ -337,6 +445,7 @@ class QQMusicAPI:
                 async with aiofiles.open(lyrics_path, "w", encoding="utf-8") as f:
                     await f.write(lyrics)
                 return True
+            logger.info("未获取到可用歌词: %s", songmid)
             return False
 
         except Exception as e:
@@ -371,11 +480,17 @@ class QQMusicAPI:
                     f"剩余时间: {eta:.1f}s"
                 )
 
-    async def get_song_url(self, songmid: str, quality: int) -> Optional[str]:
+    async def get_song_url(
+        self,
+        songmid: str,
+        media_mid: Optional[str],
+        quality: int,
+    ) -> Optional[str]:
         """获取歌曲的下载链接
 
         Args:
             songmid (str): 歌曲的唯一标识符
+            media_mid (Optional[str]): 文件存储用的 media_mid
             quality (int): 音质等级，1=128kbps，2=320kbps，3=无损
 
         Returns:
@@ -383,74 +498,144 @@ class QQMusicAPI:
         """
         try:
             logger.info(f"开始获取歌曲下载地址: songmid={songmid}, quality={quality}")
-            guid = str(random.randint(1000000000, 9999999999))
-            uin_match = re.search(r"uin=(\d+);", self.cookie)
-            uin = uin_match.group(1) if uin_match else "0"
+            guid = self._generate_guid()
+            uin = self._uin
+
+            file_mid = media_mid or songmid
+            if not media_mid:
+                logger.warning(
+                    "未提供 media_mid，回退使用 songmid 构造文件名: %s", songmid
+                )
 
             # 根据质量选择对应的格式和编码
             if quality == 1:
-                filename = f"C400{songmid}.m4a"
+                filename = f"C400{file_mid}.m4a"
             elif quality == 2:
-                filename = f"M500{songmid}.mp3"
+                filename = f"M500{file_mid}.mp3"
             elif quality == 3:
-                filename = f"F000{songmid}.flac"
+                filename = f"F000{file_mid}.flac"
             else:
                 return None
 
             logger.info(f"请求参数: guid={guid}, uin={uin}, 目标文件名: {filename}")
 
-            url = "https://u.y.qq.com/cgi-bin/musicu.fcg"
-            data = {
-                "req": {
-                    "module": "CDN.SrfCdnDispatchServer",
-                    "method": "GetCdnDispatch",
-                    "param": {"guid": guid, "calltype": 0, "userip": ""},
-                },
-                "req_0": {
-                    "module": "vkey.GetVkeyServer",
-                    "method": "CgiGetVkey",
-                    "param": {
-                        "guid": guid,
-                        "songmid": [songmid],
-                        "songtype": [0],
-                        "uin": uin,
-                        "loginflag": 1,
-                        "platform": "20",
-                    },
-                },
-                "comm": {"uin": uin, "format": "json", "ct": 24, "cv": 0},
-            }
+            final_url = await self._request_song_purl(
+                guid=guid,
+                songmid=songmid,
+                filename=filename,
+            )
 
-            params = {"format": "json", "data": json.dumps(data)}
+            if final_url:
+                logger.info(f"成功构建最终URL: {final_url}")
+                return final_url
 
-            response = await self._make_request(url, params=params)
-
-            if response and "req_0" in response:
-                midurlinfo = response["req_0"]["data"]["midurlinfo"][0]
-                purl = midurlinfo.get("purl", "")
-                vkey = midurlinfo.get("vkey", "")
-
-                logger.info(f"获取到的purl: {purl}")
-                logger.info(f"获取到的vkey: {vkey}")
-
-                if purl:
-                    final_url = f"https://isure.stream.qqmusic.qq.com/{purl}"
-                    logger.info(f"成功构建最终URL: {final_url}")
-                    return final_url
-                else:
-                    logger.error(
-                        f"未获取到purl，完整响应: {json.dumps(midurlinfo, ensure_ascii=False)}"
-                    )
-            else:
-                logger.error(
-                    f"响应格式错误，完整响应: {json.dumps(response, ensure_ascii=False)}"
-                )
+            logger.error("未能获取到下载地址")
             return None
 
         except Exception as e:
             logger.error(f"获取歌曲下载地址时出错: {str(e)}")
             logger.exception(e)  # 这会打印完整的错误堆栈
             return None
+
+    async def _request_song_purl(
+        self,
+        *,
+        guid: str,
+        songmid: str,
+        filename: str,
+    ) -> Optional[str]:
+        """调用最新 musics.fcg 接口获取 purl.
+
+        Args:
+            guid (str): 随机 GUID
+            songmid (str): 歌曲 mid
+            filename (str): 服务器上的文件名
+
+        Returns:
+            Optional[str]: 拼接完成的下载 URL
+        """
+
+        payload = {
+            "comm": self._build_comm(guid=guid),
+            "req_0": {
+                "module": "vkey.GetVkeyServer",
+                "method": "CgiGetVkey",
+                "param": {
+                    "guid": guid,
+                    "songmid": [songmid],
+                    "songtype": [0],
+                    "uin": self._uin,
+                    "loginflag": 1,
+                    "platform": "20",
+                    "filename": [filename],
+                },
+            },
+        }
+
+        parsed = await self._call_musics(payload)
+        if not parsed:
+            return None
+
+        req_data = parsed.get("req_0", {}).get("data", {})
+        msg = req_data.get("msg", "")
+        midurlinfo = req_data.get("midurlinfo") or []
+        if not midurlinfo:
+            logger.error("musics.fcg 返回缺少 midurlinfo: %s", json.dumps(parsed, ensure_ascii=False))
+            return None
+
+        purl = midurlinfo[0].get("purl")
+        if not purl:
+            if msg:
+                logger.error(
+                    "musics.fcg 返回空 purl，服务端消息: %s", msg
+                )
+            else:
+                logger.error(
+                    "musics.fcg 返回空 purl: %s",
+                    json.dumps(midurlinfo[0], ensure_ascii=False),
+                )
+            return None
+
+        if msg and ("404" in msg or "fnameHitCache_404" in msg):
+            logger.warning("CDN 消息提示 404，但成功获取 purl: %s", msg)
+
+        sip_list = req_data.get("sip") or []
+        base_url = "https://isure.stream.qqmusic.qq.com/"
+        if sip_list:
+            base_url = sip_list[0]
+        if not base_url.endswith('/'):
+            base_url += '/'
+
+        return f"{base_url}{purl}"
+
+    def _build_musics_headers(self) -> Dict[str, str]:
+        """构造 musics.fcg 请求头."""
+
+        headers = {
+            "authority": "u6.y.qq.com",
+            "accept": "application/octet-stream",
+            "accept-encoding": "gzip, deflate",
+            "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "cache-control": "no-cache",
+            "origin": "https://y.qq.com",
+            "pragma": "no-cache",
+            "priority": "u=1, i",
+            "referer": "https://y.qq.com/",
+            "sec-ch-ua": '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "user-agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/139.0.0.0 Safari/537.36"
+            ),
+            "cookie": self.cookie,
+            "content-type": "text/plain",
+        }
+        return headers
 
     async def get_lyrics(self, songmid: str) -> Optional[str]:
         """获取歌曲歌词
@@ -461,25 +646,45 @@ class QQMusicAPI:
         Returns:
             Optional[str]: 歌词文本，如果获取失败则返回 None
         """
-        try:
-            url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
-            params = {
-                "songmid": songmid,
-                "format": "json",
-                "nobase64": 0,
-                "callback": "",
-            }
-            headers = self.headers.copy()
-            headers.update({"Referer": "https://y.qq.com/portal/player.html"})
-            response = await self._make_request(url, params=params, headers=headers)
-            if response and "lyric" in response:
-                # 歌词是 base64 编码的，需要解码
-                lyric = base64.b64decode(response["lyric"]).decode("utf-8")
-                return lyric
+
+        payload = {
+            "comm": self._build_comm(guid=self._generate_guid()),
+            "req_1": {
+                "module": "music.musichallSong.PlayLyricInfo",
+                "method": "GetPlayLyricInfo",
+                "param": {
+                    "songMid": songmid,
+                    "songId": 0,
+                    "songType": 0,
+                    "lyricsType": 0,
+                    "roma": 0,
+                    "trans": 1,
+                },
+            },
+        }
+
+        result = await self._call_musics(payload)
+        if not result:
             return None
 
-        except Exception as e:
-            logger.error(f"获取歌词失败: {e}")
+        lyric_block = result.get("req_1", {})
+        code = lyric_block.get("code")
+        if code == 24001:
+            logger.warning("歌词接口无可用数据: %s", code)
+            return None
+        if code != 0:
+            logger.error("歌词接口返回错误码: %s", code)
+            return None
+
+        data = lyric_block.get("data", {})
+        lyric_base64 = data.get("lyric")
+        if not lyric_base64:
+            return None
+
+        try:
+            return base64.b64decode(lyric_base64).decode("utf-8")
+        except Exception as exc:  # pragma: no cover - 容错
+            logger.error("歌词解码失败: %s", exc)
             return None
 
     def _clean_cookie(self, cookie: str) -> str:

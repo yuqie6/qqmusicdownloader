@@ -1,0 +1,27 @@
+{
+  "name": "qqmusicdownloader",
+  "version": "1.0.0",
+  "description": "一款让音乐下载变得轻松愉快的 QQ 音乐下载工具！基于 [BeeWare](https://beeware.org/) 框架开发，力求带给你简单纯粹的下载体验。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuqie6/qqmusicdownloader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yuqie6/qqmusicdownloader/issues"
+  },
+  "homepage": "https://github.com/yuqie6/qqmusicdownloader#readme",
+  "dependencies": {
+    "regenerator-runtime": "^0.14.1"
+  }
+}

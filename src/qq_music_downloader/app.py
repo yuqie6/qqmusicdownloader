@@ -226,10 +226,25 @@ class QQMusicDownloaderApp(toga.App):
                 )
 
             ui.update_table_data(table_data)
+            self._refresh_table_selection_marks(ui)
 
         except Exception as e:
             logger.error(f"更新歌曲列表失败: {e}")
             self._require_ui().set_status_label("更新列表失败")
+
+    def _refresh_table_selection_marks(self, ui: QQMusicDownloaderUI) -> None:
+        """根据当前状态刷新表格勾选显示"""
+        try:
+            rows = list(ui.results_table.data)
+            for idx, row in enumerate(rows):
+                is_selected = (
+                    idx in self.selected_indices
+                    if ui.batch_switch.value
+                    else idx == self.current_selected
+                )
+                row.selected = "[√]" if is_selected else "[ ]"
+        except Exception as exc:  # pragma: no cover - GUI 容错
+            logger.debug("刷新表格勾选状态失败: %s", exc)
 
     def on_table_select(self, widget: toga.Table, **kwargs) -> None:
         """处理表格选择事件"""
@@ -258,9 +273,7 @@ class QQMusicDownloaderApp(toga.App):
                 self.current_selected = selected_index
                 self.selected_indices = {selected_index}
 
-            downloader = self.downloader
-            if downloader and downloader.current_songs:
-                self.update_song_list(downloader.current_songs)
+            self._refresh_table_selection_marks(ui)
 
             logger.info(f"当前选中的歌曲索引: {sorted(list(self.selected_indices))}")
 

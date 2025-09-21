@@ -160,7 +160,9 @@ class QQMusicDownloader:
         try:
             # Get the song URL and verify it exists
             song_url = await self.api.get_song_url(
-                task.song_info["songmid"], task.quality
+                task.song_info["songmid"],
+                task.song_info.get("media_mid"),
+                task.quality,
             )
 
             if not song_url:
@@ -481,7 +483,11 @@ class QQMusicDownloader:
 
                 # Get song URL before starting download
                 song = self.current_songs[index]
-                song_url = await self.api.get_song_url(song["songmid"], quality)
+                song_url = await self.api.get_song_url(
+                    song["songmid"],
+                    song.get("media_mid"),
+                    quality,
+                )
 
                 if not song_url:
                     logger.error(f"无法获取下载地址: {song['name']}")
