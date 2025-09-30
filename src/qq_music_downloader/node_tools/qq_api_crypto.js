@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 
 const { encrypt, decrypt, sign } = require('./encrypt_runtime');
 
@@ -25,6 +26,76 @@ function printUsage() {
   console.log('用法:');
   console.log('  node qq_api_crypto.js --encrypt <plain.json> [--out-body <body.txt>] [--out-sign <sign.txt>]');
   console.log('  node qq_api_crypto.js --decrypt <response.bin> [--out-json <decoded.json>]');
+  console.log('  node qq_api_crypto.js --server  # 启动长驻进程, 通过 stdin/stdout 处理请求');
+}
+
+function respond(message) {
+  const text = JSON.stringify(message);
+  console.log(text);
+  return text;
+}
+
+async function handleServerRequest(payload) {
+  if (!payload || typeof payload.action !== 'string') {
+    return { ok: false, error: '缺少 action 字段' };
+  }
+
+  try {
+    if (payload.action === 'encrypt') {
+      if (typeof payload.plain !== 'string') {
+        throw new Error('encrypt 需要 plain 字符串');
+      }
+      const signature = sign(payload.plain);
+      const encrypted = await encrypt(payload.plain);
+      return { ok: true, data: { sign: signature, body: encrypted } };
+    }
+
+    if (payload.action === 'decrypt') {
+      if (typeof payload.base64 !== 'string') {
+        throw new Error('decrypt 需要 base64 字符串');
+      }
+      const binary = Buffer.from(payload.base64, 'base64');
+      const decodedText = await decrypt(new Uint8Array(binary).buffer);
+      let parsed = null;
+      try {
+        parsed = JSON.parse(decodedText);
+      } catch (err) {
+        parsed = null;
+      }
+      return { ok: true, data: { text: decodedText, json: parsed } };
+    }
+
+    throw new Error(`未知 action: ${payload.action}`);
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function startServer() {
+  const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  rl.on('line', (line) => {
+    if (!line.trim()) {
+      return;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(line);
+    } catch (err) {
+      respond({ ok: false, error: `JSON 解析失败: ${line}` });
+      return;
+    }
+
+    handleServerRequest(payload)
+      .then((message) => respond(message))
+      .catch((err) => {
+        respond({ ok: false, error: err && err.message ? err.message : String(err) });
+      });
+  });
+
+  rl.on('close', () => {
+    process.exit(0);
+  });
 }
 
 async function handleEncrypt(args, options) {
@@ -105,6 +176,11 @@ async function handleDecrypt(args, options) {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args.includes('--server')) {
+    startServer();
+    return;
+  }
+
   if (args.length === 0 || (!args.includes('--encrypt') && !args.includes('--decrypt'))) {
     printUsage();
     process.exit(1);

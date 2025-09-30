@@ -40,10 +40,10 @@ function createSandbox() {
         const element = {
           tag,
           style: {},
-          setAttribute() {},
-          appendChild() {},
-          remove() {},
-          parentNode: { removeChild() {} }
+          setAttribute() { },
+          appendChild() { },
+          remove() { },
+          parentNode: { removeChild() { } }
         };
 
         Object.defineProperty(element, 'src', {
@@ -95,8 +95,8 @@ function createSandbox() {
         return element;
       },
       body: {
-        appendChild() {},
-        removeChild() {}
+        appendChild() { },
+        removeChild() { }
       },
       getElementsByTagName() {
         return [];
@@ -108,7 +108,7 @@ function createSandbox() {
     XMLHttpRequest: function () {
       this.responseType = 'text';
       this.headers = {};
-      this.open = function () {};
+      this.open = function () { };
       this.setRequestHeader = function (k, v) {
         this.headers[k] = v;
       };
@@ -117,18 +117,18 @@ function createSandbox() {
           this.onreadystatechange();
         }
       };
-      this.abort = function () {};
+      this.abort = function () { };
     },
     setTimeout: (fn) => {
       fn();
       return 0;
     },
-    clearTimeout: () => {},
+    clearTimeout: () => { },
     setInterval: (fn) => {
       fn();
       return 0;
     },
-    clearInterval: () => {},
+    clearInterval: () => { },
     Promise,
     regeneratorRuntime: {},
     performance: {
@@ -155,12 +155,12 @@ function createSandbox() {
   sandbox.window.TextEncoder = TextEncoder;
   sandbox.window.TextDecoder = TextDecoder;
   sandbox.window.crypto = webcrypto;
-  sandbox.window.addEventListener = function () {};
+  sandbox.window.addEventListener = function () { };
   sandbox.window.requestAnimationFrame = function (fn) {
     return sandbox.setTimeout(fn, 0);
   };
-  sandbox.window.cancelAnimationFrame = function () {};
-  sandbox.window.reportCgi = { reportSend() {} };
+  sandbox.window.cancelAnimationFrame = function () { };
+  sandbox.window.reportCgi = { reportSend() { } };
   sandbox.window.Image = function () {
     return {
       set src(value) {

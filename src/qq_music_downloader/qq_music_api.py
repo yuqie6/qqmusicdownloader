@@ -38,6 +38,8 @@ class APIConfig:
 class QQMusicAPI:
     """QQ音乐API处理类"""
 
+    _UNICODE_PATTERN = re.compile(r"\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}")
+
     def __init__(self, cookie: str):
         self.cookie = self._clean_cookie(cookie)
         self.config = APIConfig()
@@ -177,6 +179,8 @@ class QQMusicAPI:
             except json.JSONDecodeError:
                 logger.error("musics.fcg 响应无法解析为 JSON")
                 return None
+
+        parsed = self._decode_unicode_tree(parsed)
 
         return parsed
 
@@ -580,15 +584,16 @@ class QQMusicAPI:
         msg = req_data.get("msg", "")
         midurlinfo = req_data.get("midurlinfo") or []
         if not midurlinfo:
-            logger.error("musics.fcg 返回缺少 midurlinfo: %s", json.dumps(parsed, ensure_ascii=False))
+            logger.error(
+                "musics.fcg 返回缺少 midurlinfo: %s",
+                json.dumps(parsed, ensure_ascii=False),
+            )
             return None
 
         purl = midurlinfo[0].get("purl")
         if not purl:
             if msg:
-                logger.error(
-                    "musics.fcg 返回空 purl，服务端消息: %s", msg
-                )
+                logger.error("musics.fcg 返回空 purl，服务端消息: %s", msg)
             else:
                 logger.error(
                     "musics.fcg 返回空 purl: %s",
@@ -603,8 +608,8 @@ class QQMusicAPI:
         base_url = "https://isure.stream.qqmusic.qq.com/"
         if sip_list:
             base_url = sip_list[0]
-        if not base_url.endswith('/'):
-            base_url += '/'
+        if not base_url.endswith("/"):
+            base_url += "/"
 
         return f"{base_url}{purl}"
 
@@ -699,6 +704,42 @@ class QQMusicAPI:
         for char in illegal_chars:
             filename = filename.replace(char, "_")
         return filename
+
+    @classmethod
+    def _decode_unicode_value(cls, value: Any) -> Any:
+        """解码包含 Unicode 转义的字符串。
+
+        Args:
+            value: 待处理的数据，可以是字符串或其他类型。
+
+        Returns:
+            Any: 若为字符串且包含 ``\\uXXXX``/``\\UXXXXXXXX`` 转义，则返回解码后的结果；
+            否则原样返回。
+        """
+
+        if isinstance(value, str) and cls._UNICODE_PATTERN.search(value):
+            try:
+                return value.encode("utf-8").decode("unicode_escape")
+            except UnicodeDecodeError:
+                return value
+        return value
+
+    @classmethod
+    def _decode_unicode_tree(cls, data: Any) -> Any:
+        """递归解码字典或列表中的 Unicode 转义字符串。
+
+        Args:
+            data: 待处理的数据结构。
+
+        Returns:
+            Any: 解码后的数据结构，保持原有层次。
+        """
+
+        if isinstance(data, dict):
+            return {key: cls._decode_unicode_tree(value) for key, value in data.items()}
+        if isinstance(data, list):
+            return [cls._decode_unicode_tree(item) for item in data]
+        return cls._decode_unicode_value(data)
 
 
 @dataclass

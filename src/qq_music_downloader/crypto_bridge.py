@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import atexit
+import base64
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import IO, Any, Dict, Optional, Tuple
 
 
 class NodeCryptoError(RuntimeError):
@@ -18,6 +22,7 @@ class NodeCryptoError(RuntimeError):
 _NODE_PACKAGE = "qq_music_downloader.node_tools"
 _NODE_SCRIPT_NAME = "qq_api_crypto.js"
 _NODE_WORKSPACE: Optional[Path] = None
+_LOGGER = logging.getLogger(__name__)
 
 
 def _ensure_node_workspace() -> Path:
@@ -59,48 +64,148 @@ def _node_executable() -> str:
 
     node_path = shutil.which("node")
     if not node_path:
-        raise NodeCryptoError(
-            "未检测到 Node.js，请安装 Node 18+ 后重试"
-        )
+        raise NodeCryptoError("未检测到 Node.js，请安装 Node 18+ 后重试")
     return node_path
 
 
-def _run_node_json(args: list[str]) -> Dict[str, Any]:
-    """运行 Node 脚本并解析 JSON 输出.
+class _NodeCryptoClient:
+    """管理长驻 Node 加解密进程的客户端."""
 
-    Args:
-        args (list[str]): 传递给 Node 工具的参数列表。
+    def __init__(self) -> None:
+        self._process: subprocess.Popen[str] | None = None
+        self._stdin: IO[str] | None = None
+        self._stdout: IO[str] | None = None
+        self._stderr_thread: threading.Thread | None = None
+        self._lock = threading.Lock()
 
-    Returns:
-        Dict[str, Any]: 解析后的 JSON 数据。
+    def _drain_stderr(self, stream: IO[str]) -> None:
+        """持续读取 stderr 并记录异常输出."""
 
-    Raises:
-        NodeCryptoError: 当 Node 进程返回非零状态或输出非法 JSON。
-    """
+        for line in stream:
+            text = line.rstrip()
+            if text:
+                _LOGGER.warning("Node stderr: %s", text)
 
-    workspace = _ensure_node_workspace()
-    node_path = _node_executable()
-    script_path = workspace / _NODE_SCRIPT_NAME
-    cmd = [node_path, str(script_path), *args, "--json"]
-    try:
-        completed = subprocess.run(
-            cmd,
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd=workspace,
-        )
-    except subprocess.CalledProcessError as exc:  # pragma: no cover - 系统命令执行失败
-        raise NodeCryptoError(exc.stderr or exc.stdout or str(exc)) from exc
+    def _close_no_lock(self) -> None:
+        if self._stdin is not None:
+            try:
+                self._stdin.close()
+            except OSError:
+                pass
+        if self._stdout is not None:
+            try:
+                self._stdout.close()
+            except OSError:
+                pass
+        if self._process is not None and self._process.poll() is None:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=1)
+            except (
+                ProcessLookupError,
+                subprocess.TimeoutExpired,
+            ):  # pragma: no cover - 极端场景
+                self._process.kill()
+        self._process = None
+        self._stdin = None
+        self._stdout = None
 
-    stdout = (completed.stdout or "").strip()
-    if not stdout:
-        raise NodeCryptoError("Node 工具未返回任何输出")
+    def _ensure_process(self) -> None:
+        if self._process is not None and self._process.poll() is None:
+            return
 
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise NodeCryptoError(f"无法解析 Node 输出: {stdout}") from exc
+        self._close_no_lock()
+
+        workspace = _ensure_node_workspace()
+        node_path = _node_executable()
+        script_path = workspace / _NODE_SCRIPT_NAME
+
+        try:
+            self._process = subprocess.Popen(
+                [node_path, str(script_path), "--server"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=workspace,
+                bufsize=1,
+            )
+        except OSError as exc:  # pragma: no cover - 子进程无法启动
+            raise NodeCryptoError(str(exc)) from exc
+
+        if self._process.stdin is None or self._process.stdout is None:
+            raise NodeCryptoError("无法与 Node 进程建立通信管道")
+
+        self._stdin = self._process.stdin
+        self._stdout = self._process.stdout
+
+        if self._process.stderr is not None:
+            self._stderr_thread = threading.Thread(
+                target=self._drain_stderr,
+                args=(self._process.stderr,),
+                daemon=True,
+            )
+            self._stderr_thread.start()
+
+    def request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """向 Node 进程发送请求并解析结果."""
+
+        message = json.dumps(payload, ensure_ascii=False)
+        with self._lock:
+            self._ensure_process()
+            assert self._stdin is not None
+            assert self._stdout is not None
+
+            _LOGGER.debug("发送 Node 请求: %s", payload.get("action"))
+            self._stdin.write(message + "\n")
+            self._stdin.flush()
+
+            response = self._stdout.readline()
+            if response == "":
+                returncode = self._process.poll() if self._process else None
+                self._close_no_lock()
+                raise NodeCryptoError(f"Node 进程意外退出, returncode={returncode}")
+
+        response = response.strip()
+        if not response:
+            raise NodeCryptoError("Node 返回空响应")
+
+        try:
+            parsed = json.loads(response)
+        except json.JSONDecodeError as exc:
+            _LOGGER.error("无法解析 Node 响应: %s", response)
+            raise NodeCryptoError(f"无法解析 Node 响应: {response}") from exc
+
+        if not isinstance(parsed, dict):
+            raise NodeCryptoError("Node 响应格式异常")
+
+        if not parsed.get("ok"):
+            error_msg = parsed.get("error", "未知错误")
+            _LOGGER.error("Node 返回错误: %s", error_msg)
+            raise NodeCryptoError(f"Node 返回错误: {error_msg}")
+
+        data = parsed.get("data")
+        if not isinstance(data, dict):
+            raise NodeCryptoError("Node 响应缺少 data 字段")
+
+        return data
+
+    def close(self) -> None:
+        """终止 Node 进程."""
+
+        with self._lock:
+            self._close_no_lock()
+
+
+_NODE_CLIENT = _NodeCryptoClient()
+atexit.register(_NODE_CLIENT.close)
+
+
+def _node_request(action: str, **payload: Any) -> Dict[str, Any]:
+    """封装 Node 请求, 自动附加 action 字段."""
+
+    request_body = {"action": action, **payload}
+    return _NODE_CLIENT.request(request_body)
 
 
 def encrypt_payload(payload: str) -> Tuple[str, str]:
@@ -116,18 +221,7 @@ def encrypt_payload(payload: str) -> Tuple[str, str]:
         NodeCryptoError: 当 Node 工具执行失败。
     """
 
-    tmp_path: Optional[Path] = None
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as tmp:
-        tmp.write(payload)
-        tmp_path = Path(tmp.name)
-
-    try:
-        if tmp_path is None:
-            raise NodeCryptoError("临时文件创建失败")
-        result = _run_node_json(["--encrypt", str(tmp_path)])
-    finally:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+    result = _node_request("encrypt", plain=payload)
 
     body = result.get("body")
     sign = result.get("sign")
@@ -150,18 +244,8 @@ def decrypt_response(blob: bytes) -> Tuple[str, Dict[str, Any] | None]:
         NodeCryptoError: 当 Node 工具执行失败。
     """
 
-    tmp_path: Optional[Path] = None
-    with tempfile.NamedTemporaryFile("wb", suffix=".bin", delete=False) as tmp:
-        tmp.write(blob)
-        tmp_path = Path(tmp.name)
-
-    try:
-        if tmp_path is None:
-            raise NodeCryptoError("临时文件创建失败")
-        result = _run_node_json(["--decrypt", str(tmp_path)])
-    finally:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+    base64_blob = base64.b64encode(blob).decode("ascii")
+    result = _node_request("decrypt", base64=base64_blob)
 
     text = result.get("text")
     parsed = result.get("json")
