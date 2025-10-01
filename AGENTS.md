@@ -1,10 +1,10 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-核心 TUI 实现在 `src/qq_music_downloader/`。`app.py` 负责 Textual 布局与交互，保持 UI 逻辑与下载流程解耦；`downloader.py` 聚焦异步写盘与重试；`qq_music_api.py` 封装 HTTP 与 Cookie 校验；`crypto_bridge.py` 连接 `node_tools/` 下的 QQ API 加密脚本。静态资源放在 `resources/`。终端示例与额外资料位于 `docs/`。回归测试集中在 `tests/`，务必与业务模块一一对应。`music-downloader-site/` 为站点素材，修改前确认不会破坏 TUI 主流程。
+核心 TUI 实现在 `src/qqmusicdownloader/`，按分层结构划分：`ui/` 负责 Textual 布局与交互，`services/` 编排下载流程，`domain/` 保存实体与配置，`infrastructure/` 对接 QQ 音乐 API、加密脚本与文件系统。静态资源放在 `resources/`。终端示例与额外资料位于 `docs/`。回归测试集中在 `tests/`，务必与业务模块一一对应。`music-downloader-site/` 为站点素材，修改前确认不会破坏 TUI 主流程。
 
 ## Build, Test, and Development Commands
-使用 uv 简化环境：`uv run qqmusicdownloader` 启动 TUI 并加载依赖。首次贡献请执行 `uv sync` 以安装项目锁定的依赖。校验异步逻辑前运行 `uv run pytest`。静态检查使用 `uv run ruff check .`；格式化则用 `uv run ruff format .`。如需调试单个模块，可调用 `uv run python -m qq_music_downloader.downloader`。
+使用 uv 简化环境：`uv run qqmusicdownloader` 启动 TUI 并加载依赖。首次贡献请执行 `uv sync` 以安装项目锁定的依赖。校验异步逻辑前运行 `uv run pytest`。静态检查使用 `uv run ruff check .`；格式化则用 `uv run ruff format .`。如需调试单个模块，可调用 `uv run python -m qqmusicdownloader`。
 
 ## Coding Style & Naming Conventions
 代码遵循 Python 3.11 标准，统一使用 4 空格缩进与 Unix 换行。模块、包、函数与变量采 snake_case，类名使用 PascalCase。保留类型注解以提升异步边界的可维护性；公开函数应声明返回类型。避免在 UI 层进行网络请求，保持单一职责。配置值（下载目录、API 常量）集中在模块顶部，便于复用。

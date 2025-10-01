@@ -19,7 +19,7 @@ class NodeCryptoError(RuntimeError):
     """Node 工具执行失败时抛出的异常."""
 
 
-_NODE_PACKAGE = "qq_music_downloader.node_tools"
+_NODE_PACKAGE = "qqmusicdownloader.infrastructure.crypto.node_tools"
 _NODE_SCRIPT_NAME = "qq_api_crypto.js"
 _NODE_WORKSPACE: Optional[Path] = None
 _LOGGER = logging.getLogger(__name__)

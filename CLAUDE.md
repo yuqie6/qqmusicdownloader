@@ -13,12 +13,12 @@ graph TD
     A --> D["tests"];
     A --> E["docs"];
 
-    B --> F["qq_music_downloader"];
-    F --> G["app.py"];
-    F --> H["qq_music_api.py"];
-    F --> I["downloader.py"];
-    F --> J["crypto_bridge.py"];
-    F --> K["node_tools"];
+    B --> F["qqmusicdownloader"];
+    F --> G["ui/"];
+    F --> H["services/"];
+    F --> I["domain/"];
+    F --> J["infrastructure/"];
+    J --> K["crypto/node_tools"];
 
     C --> L["src"];
     L --> M["App.js"];
@@ -28,7 +28,7 @@ graph TD
 
     E --> P["research"];
 
-    click F "./src/qq_music_downloader/CLAUDE.md" "查看核心模块文档"
+    click F "./src/qqmusicdownloader/CLAUDE.md" "查看核心模块文档"
     click C "./music-downloader-site/CLAUDE.md" "查看前端网站文档"
     click D "./tests/CLAUDE.md" "查看测试模块文档"
     click E "./docs/CLAUDE.md" "查看文档模块文档"
@@ -38,7 +38,7 @@ graph TD
 
 | 模块路径 | 语言 | 职责 | 入口文件 | 测试覆盖 |
 |---------|------|------|----------|----------|
-| `src/qq_music_downloader/` | Python | 核心下载逻辑 | `app.py` | ✅ |
+| `src/qqmusicdownloader/` | Python | 分层后的核心逻辑 | `ui/app.py` | ✅ |
 | `music-downloader-site/` | JavaScript/React | 前端展示网站 | `src/App.js` | ❌ |
 | `tests/` | Python | 测试套件 | `test_app.py` | 基础 |
 | `docs/research/` | JSON/JS | API 研究文档 | - | ❌ |
@@ -56,7 +56,7 @@ graph TD
 uv run qqmusicdownloader
 
 # 或使用 pip
-python -m qq_music_downloader
+python -m qqmusicdownloader
 ```
 
 ### 开发模式

@@ -22,14 +22,15 @@ pytest tests/
 pytest tests/test_app.py
 
 # 生成覆盖率报告
-pytest --cov=src/qq_music_downloader tests/
+pytest --cov=src/qqmusicdownloader tests/
 ```
 
 ## 对外接口
 
 ### 测试类和函数
 - `test_first()` - 基础测试示例
-- `qq_music_downloader.py` - 集成测试文件
+- `unit/test_download_service.py` - 下载服务单元测试样例
+- `qqmusicdownloader.py` - 集成测试入口脚本
 - `__init__.py` - 测试包初始化
 
 ### 测试覆盖范围
@@ -46,6 +47,7 @@ pytest --cov=src/qq_music_downloader tests/
 # pyproject.toml
 dependencies = [
     "pytest>=8.4.2",
+    "pytest-asyncio>=0.23.6",
     # 其他依赖...
 ]
 ```
@@ -70,7 +72,7 @@ dependencies = [
 ## 测试与质量
 
 ### 当前测试策略
-- **单元测试**：基础框架
+- **单元测试**：覆盖下载服务核心逻辑
 - **集成测试**：API 接口测试 (待开发)
 - **端到端测试**：完整下载流程测试 (待开发)
 
@@ -105,13 +107,13 @@ A: 使用 `pytest tests/` 命令运行所有测试。
 A: 在 `tests/` 目录下创建新的测试文件，以 `test_` 开头。
 
 ### Q: 如何生成覆盖率报告？
-A: 使用 `pytest --cov=src/qq_music_downloader tests/`。
+A: 使用 `pytest --cov=src/qqmusicdownloader tests/`。
 
 ## 相关文件清单
 
 ### 测试文件
 - `test_app.py` - 应用基础测试 (4行)
-- `qq_music_downloader.py` - 集成测试文件
+- `qqmusicdownloader.py` - 集成测试文件
 - `__init__.py` - 测试包初始化
 
 ### 配置文件

@@ -7,7 +7,7 @@ import asyncio
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional, cast
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -22,8 +22,8 @@ from textual.widgets import (
     Select,
 )
 
-from .downloader import QQMusicDownloader
-from .qq_music_api import QQMusicAPI
+from qqmusicdownloader.domain import SongRecord
+from qqmusicdownloader.services import DownloadService
 
 
 logging.basicConfig(
@@ -116,11 +116,11 @@ class QQMusicApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.api: Optional[QQMusicAPI] = None
-        self.downloader: Optional[QQMusicDownloader] = None
-        self.current_songs: List[Dict[str, Any]] = []
+        self.service: Optional[DownloadService] = None
+        self.current_songs: list[SongRecord] = []
         self.is_downloading = False
         self._download_path = Path.home() / "Desktop" / "QQMusic"
+        self._path_overridden = False
         self._unicode_pattern = re.compile(r"\\u[0-9a-fA-F]{4}")
 
     def compose(self) -> ComposeResult:
@@ -240,7 +240,7 @@ class QQMusicApp(App[None]):
 
     def _update_selection_label(self) -> None:
 
-        selection_list = self.query_one("#results", SelectionList[int])
+        selection_list = cast(SelectionList[int], self.query_one("#results", SelectionList))
         selected_count = len(selection_list.selected)
         label = self.query_one("#selection-label", Label)
         label.update(f"已选 {selected_count} 首")
@@ -263,11 +263,9 @@ class QQMusicApp(App[None]):
         path_input = self.query_one("#path-input", Input)
         path_input.value = str(resolved)
 
-        api = self.api
-        if api is not None:
-            api.base_dir = resolved
-            api.music_dir = music_dir
-            api.lyrics_dir = lyrics_dir
+        service = self.service
+        if service is not None:
+            service.set_download_path(resolved)
             LOGGER.info("下载目录更新为: %s", resolved)
 
     async def _save_cookie(self) -> None:
@@ -279,24 +277,23 @@ class QQMusicApp(App[None]):
             return
 
         try:
-            downloader = QQMusicDownloader(cookie)
-            api = downloader.api
+            service = DownloadService.from_cookie(cookie)
             self.set_status("正在验证 Cookie...")
-            is_valid = await api.validate_cookie()
+            is_valid = await service.validate_cookie()
             if not is_valid:
                 self.set_status("❌ Cookie 验证失败，请检查")
                 return
 
-            self.downloader = downloader
-            self.api = api
+            self.service = service
+            if not self._path_overridden:
+                self._download_path = Path(service.get_download_path())
             self._ensure_download_dirs(self._download_path)
             self.set_status("✅ Cookie 验证成功")
             start_button = self.query_one("#start-download", Button)
             start_button.disabled = False
         except Exception as exc:  # pragma: no cover - 兜底保护
             LOGGER.exception("保存 Cookie 失败")
-            self.downloader = None
-            self.api = None
+            self.service = None
             self.set_status(f"❌ 错误: {exc}")
 
     async def _apply_path(self) -> None:
@@ -309,6 +306,7 @@ class QQMusicApp(App[None]):
         candidate_path = Path(candidate)
         try:
             self._ensure_download_dirs(candidate_path)
+            self._path_overridden = True
             self.set_status(f"下载目录已更新: {candidate_path}")
         except OSError as exc:
             LOGGER.exception("创建目录失败")
@@ -316,7 +314,8 @@ class QQMusicApp(App[None]):
 
     async def _search_songs(self) -> None:
 
-        if not self.api:
+        service = self.service
+        if not service:
             self.set_status("请先配置 Cookie")
             return
 
@@ -328,7 +327,7 @@ class QQMusicApp(App[None]):
 
         self.set_status(f"正在搜索: {keyword}...")
         try:
-            songs = await self.api.search_song(keyword)
+            songs = await service.search(keyword)
         except Exception as exc:  # pragma: no cover - 网络异常
             LOGGER.exception("搜索失败")
             self.set_status(f"搜索失败: {exc}")
@@ -336,14 +335,16 @@ class QQMusicApp(App[None]):
 
         if not songs:
             self.current_songs = []
-            selection_list = self.query_one("#results", SelectionList[int])
+            selection_list = cast(
+                SelectionList[int], self.query_one("#results", SelectionList)
+            )
             selection_list.clear_options()
             self._update_selection_label()
             self.set_status("未找到相关歌曲")
             return
 
         self.current_songs = songs[:20]
-        selection_list = self.query_one("#results", SelectionList[int])
+        selection_list = cast(SelectionList[int], self.query_one("#results", SelectionList))
         selection_list.clear_options()
         for index, song in enumerate(self.current_songs):
             name = self.normalize_text(song.get("name", "未知歌曲"))
@@ -361,11 +362,12 @@ class QQMusicApp(App[None]):
             self.set_status("已有下载任务进行中")
             return
 
-        if not self.api:
+        service = self.service
+        if not service:
             self.set_status("请先配置 Cookie")
             return
 
-        selection_list = self.query_one("#results", SelectionList[int])
+        selection_list = cast(SelectionList[int], self.query_one("#results", SelectionList))
         indices = sorted(set(selection_list.selected))
         if not indices:
             self.set_status("请先选择要下载的歌曲")
@@ -412,54 +414,28 @@ class QQMusicApp(App[None]):
             await asyncio.sleep(1)
             self._set_progress(0, 0)
 
-    async def _download_song(self, song: Dict[str, Any], quality: int) -> bool:
+    async def _download_song(self, song: SongRecord, quality: int) -> bool:
 
-        api = self.api
-        if api is None:
-            return False
-
-        songmid = song.get("songmid") or song.get("id")
-        media_mid = song.get("media_mid") or songmid
-        if not songmid:
-            LOGGER.error("歌曲缺少 songmid: %s", song)
+        service = self.service
+        if service is None:
             return False
 
         try:
-            download_url = await api.get_song_url(songmid, media_mid, quality)
-        except Exception:  # pragma: no cover - 外部依赖
-            LOGGER.exception("获取下载链接失败")
+            return await service.download_song(song, quality)
+        except ValueError as exc:
+            LOGGER.error("歌曲信息不完整: %s", exc)
             return False
-
-        if not download_url:
-            LOGGER.error("未获取到下载链接: %s", songmid)
-            return False
-
-        filename = f"{song.get('name', '未知歌曲')} - {song.get('singer', '未知歌手')}"
-
-        pause_events = None
-        downloader = self.downloader
-        if downloader and getattr(downloader, "global_pause_event", None):
-            pause_events = [downloader.global_pause_event]
-
-        try:
-            return await api.download_with_lyrics(
-                download_url,
-                filename,
-                quality,
-                songmid,
-                pause_events=pause_events,
-            )
         except Exception:  # pragma: no cover - 外部依赖
-            LOGGER.exception("下载失败: %s", filename)
+            LOGGER.exception("下载失败: %s", song)
             return False
 
     async def _toggle_pause(self) -> None:
 
-        downloader = self.downloader
-        if not downloader or not hasattr(downloader, "global_pause_event"):
+        service = self.service
+        if not service:
             return
 
-        pause_event = downloader.global_pause_event
+        pause_event = service.global_pause_event
         if pause_event.is_set():
             pause_event.clear()
             self.set_status("⏸ 已暂停")

@@ -40,14 +40,14 @@ source .venv/bin/activate
 # Windows CMD
 ./.venv/Scripts/activate.bat
 pip install textual aiohttp aiofiles
-python -m qq_music_downloader
+python -m qqmusicdownloader
 ```
 
 > 建议优先使用 uv，以获得更快的依赖解析速度与更加可重复的环境。
 
 ## 🎮 使用指南
 
-1. 运行 `uv run qqmusicdownloader`（或 `python -m qq_music_downloader`）打开终端界面
+1. 运行 `uv run qqmusicdownloader`（或 `python -m qqmusicdownloader`）打开终端界面
 2. 粘贴 QQ 音乐 VIP 账号 Cookie，按 Enter 或点击“保存 Cookie”完成验证
 3. 如需更改下载目录，在路径输入框中填写并“应用路径”
 4. 输入关键词进行搜索，等待结果出现在列表中

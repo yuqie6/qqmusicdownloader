@@ -9,11 +9,12 @@ dependencies = [
     "aiohttp>=3.12.15",
     "textual>=0.58.1",
     "pytest>=8.4.2",
+    "pytest-asyncio>=0.23.6",
     "ruff>=0.13.1",
 ]
 
 [project.scripts]
-qqmusicdownloader = "qq_music_downloader.app:main"
+qqmusicdownloader = "qqmusicdownloader.ui.app:main"
 
 [tool.uv]
 package = true

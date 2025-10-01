@@ -1,27 +1,27 @@
-# qq_music_api.py
-import aiohttp
+"""QQ 音乐 API 客户端基础设施实现。"""
+
+from __future__ import annotations
+
+import base64
 import json
 import logging
 import random
-from pathlib import Path
-import aiofiles
-from typing import Any, Dict, List, Optional
-import base64
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
-import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-try:
-    from .crypto_bridge import (
-        NodeCryptoError,
-        decrypt_response,
-        encrypt_payload,
-    )
-except ImportError:  # pragma: no cover - 兼容独立脚本导入
-    from crypto_bridge import NodeCryptoError, decrypt_response, encrypt_payload
+import aiofiles
+import aiohttp
 
-logging.basicConfig(level=logging.INFO)
+from qqmusicdownloader.infrastructure.crypto.bridge import (
+    NodeCryptoError,
+    decrypt_response,
+    encrypt_payload,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +47,7 @@ class QQMusicAPI:
         self._uin = self._normalize_uin(raw_uin)
         self._g_tk = self._calculate_g_tk()
         self._setup_headers()
-        self._setup_directories()
+        self.configure_download_dirs(self._default_download_base())
         self._setup_session()
 
     def _setup_headers(self):
@@ -289,21 +289,28 @@ class QQMusicAPI:
             logger.error(f"搜索歌曲时出错: {e}")
             raise  # 向上层抛出异常，让调用者处理
 
-    def _setup_session(self):
-        """设置异步会话"""
+    def _setup_session(self) -> None:
+        """设置异步会话."""
+
         self.timeout = aiohttp.ClientTimeout(total=self.config.timeout)
 
-    def _setup_directories(self):
-        """设置下载目录结构"""
-        self.base_dir = Path.home() / "Desktop" / "QQMusic"
-        self.music_dir = self.base_dir / "Music"
-        self.lyrics_dir = self.base_dir / "Lyrics"
+    def _default_download_base(self) -> Path:
+        """返回默认下载目录。"""
 
-        # 创建所需目录
-        for directory in [self.music_dir, self.lyrics_dir]:
+        return Path.home() / "Desktop" / "QQMusic"
+
+    def configure_download_dirs(self, base_dir: Path) -> None:
+        """配置下载目录并创建必要结构。"""
+
+        resolved = base_dir.expanduser()
+        self.base_dir = resolved
+        self.music_dir = resolved / "Music"
+        self.lyrics_dir = resolved / "Lyrics"
+
+        for directory in (self.music_dir, self.lyrics_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"下载目录初始化完成: {self.base_dir}")
+        logger.info("下载目录初始化完成: %s", resolved)
 
     def get_download_path(self) -> str:
         """返回下载目录路径"""
