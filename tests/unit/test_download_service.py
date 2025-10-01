@@ -16,6 +16,9 @@ class StubDownloadAPI:
         self.configured_dir: Path | None = None
         self.get_song_url_calls: list[tuple[str, str, int]] = []
         self.download_calls: list[dict[str, object]] = []
+        self.raise_on_configure: Exception | None = None
+        self.url_to_return: str | None = "https://example.com/song"
+        self.raise_on_download: Exception | None = None
 
     async def validate_cookie(self) -> bool:
         return True
@@ -38,11 +41,13 @@ class StubDownloadAPI:
         return "/tmp/qqmusic"
 
     def configure_download_dirs(self, base_dir: Path) -> None:
+        if self.raise_on_configure:
+            raise self.raise_on_configure
         self.configured_dir = base_dir
 
     async def get_song_url(self, songmid: str, media_mid: str, quality: int) -> str | None:
         self.get_song_url_calls.append((songmid, media_mid, quality))
-        return "https://example.com/song"
+        return self.url_to_return
 
     async def download_with_lyrics(
         self,
@@ -55,6 +60,8 @@ class StubDownloadAPI:
         progress_label: object | None = None,
         pause_events: list[asyncio.Event] | None = None,
     ) -> bool:
+        if self.raise_on_download:
+            raise self.raise_on_download
         self.download_calls.append(
             {
                 "url": url,
@@ -105,3 +112,52 @@ async def test_download_song_requires_songmid() -> None:
         await service.download_song(song, quality=1)
 
     assert api.get_song_url_calls == []
+
+
+@pytest.mark.asyncio
+async def test_download_song_handles_missing_url() -> None:
+    api = StubDownloadAPI()
+    api.url_to_return = None
+    service = DownloadService(api)
+
+    song = (await service.search("测试"))[0]
+
+    result = await service.download_song(song, quality=1)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_download_song_propagates_download_error() -> None:
+    api = StubDownloadAPI()
+    api.raise_on_download = RuntimeError("io failure")
+    service = DownloadService(api)
+
+    song = (await service.search("测试"))[0]
+
+    with pytest.raises(RuntimeError):
+        await service.download_song(song, quality=1)
+
+
+@pytest.mark.asyncio
+async def test_pause_event_chain() -> None:
+    api = StubDownloadAPI()
+    service = DownloadService(api)
+
+    extra_event = asyncio.Event()
+    extra_event.set()
+
+    song = (await service.search("测试"))[0]
+    await service.download_song(song, quality=1, extra_pause_events=[extra_event])
+
+    pause_events = api.download_calls[0]["pause_events"]
+    assert service.global_pause_event in pause_events
+    assert extra_event in pause_events
+
+
+def test_set_download_path_propogates_error() -> None:
+    api = StubDownloadAPI()
+    api.raise_on_configure = RuntimeError("no permission")
+    service = DownloadService(api)
+
+    with pytest.raises(RuntimeError):
+        service.set_download_path(Path("/tmp/unwritable"))

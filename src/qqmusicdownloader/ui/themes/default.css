@@ -1,0 +1,63 @@
+Screen {
+    background: $surface;
+    color: $text;
+}
+
+#main {
+    layout: vertical;
+    padding: 1 2;
+}
+
+.section {
+    border: solid $secondary;
+    border-title-align: left;
+    padding: 1;
+    margin: 0 0 1 0;
+}
+
+.section-title {
+    color: $text;
+    text-style: bold;
+}
+
+Label {
+    color: $text;
+}
+
+Input {
+    color: $text;
+    border: solid $secondary;
+}
+
+Button {
+    color: $text;
+}
+
+SelectionList {
+    color: $text;
+}
+
+Select {
+    color: $text;
+}
+
+#cookie-box,
+#path-box,
+#search-box {
+    layout: vertical;
+}
+
+#path-line,
+#search-line,
+#actions {
+    layout: horizontal;
+}
+
+#results {
+    height: 18;
+    min-height: 10;
+}
+
+#status-block {
+    layout: vertical;
+}
