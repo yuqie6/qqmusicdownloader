@@ -1,0 +1,145 @@
+{
+  "timestamp": "2025-10-02T02:36:28Z",
+  "project_name": "qqmusicdownloader",
+  "total_files_scanned": 35,
+  "modules": [
+    {
+      "path": "src/qq_music_downloader",
+      "name": "核心下载模块",
+      "language": "Python",
+      "entry_file": "app.py",
+      "interfaces": [
+        "QQMusicAPI",
+        "QQMusicDownloader",
+        "QQMusicApp"
+      ],
+      "tests": true,
+      "coverage": "基础",
+      "dependencies": [
+        "aiohttp",
+        "textual",
+        "aiofiles",
+        "pytest",
+        "ruff"
+      ],
+      "key_files": [
+        "app.py",
+        "qq_music_api.py",
+        "downloader.py",
+        "crypto_bridge.py"
+      ]
+    },
+    {
+      "path": "music-downloader-site",
+      "name": "前端网站模块",
+      "language": "JavaScript/React",
+      "entry_file": "src/App.js",
+      "interfaces": [
+        "React Router",
+        "LandingPage",
+        "GuidePage"
+      ],
+      "tests": false,
+      "coverage": "无",
+      "dependencies": [
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "tailwindcss"
+      ],
+      "key_files": [
+        "src/App.js",
+        "src/components/LandingPage.js",
+        "package.json"
+      ]
+    },
+    {
+      "path": "tests",
+      "name": "测试模块",
+      "language": "Python",
+      "entry_file": "test_app.py",
+      "interfaces": [
+        "pytest"
+      ],
+      "tests": true,
+      "coverage": "基础框架",
+      "dependencies": [
+        "pytest"
+      ],
+      "key_files": [
+        "test_app.py",
+        "qq_music_downloader.py"
+      ]
+    },
+    {
+      "path": "docs",
+      "name": "文档模块",
+      "language": "JSON/JS",
+      "entry_file": null,
+      "interfaces": [],
+      "tests": false,
+      "coverage": "研究数据",
+      "dependencies": [],
+      "key_files": [
+        "research/musics_response_decrypted.json",
+        "research/test_payload.json"
+      ]
+    }
+  ],
+  "scan_coverage": {
+    "total_estimated_files": 45,
+    "scanned_files": 35,
+    "coverage_percentage": 78,
+    "ignored_patterns": [
+      "node_modules/**",
+      "__pycache__/**",
+      ".git/**",
+      "dist/**",
+      "build/**",
+      "docs/research/**",
+      "*.log",
+      "*.lock"
+    ],
+    "ignored_files_count": 10
+  },
+  "gaps": [
+    {
+      "module": "src/qq_music_downloader",
+      "missing": [
+        "完整的 API 接口文档",
+        "Node.js 工具详细说明",
+        "错误处理机制文档"
+      ]
+    },
+    {
+      "module": "tests",
+      "missing": [
+        "API 接口测试",
+        "下载功能测试",
+        "UI 交互测试",
+        "加密解密测试"
+      ]
+    },
+    {
+      "module": "music-downloader-site",
+      "missing": [
+        "组件测试",
+        "样式配置文档"
+      ]
+    }
+  ],
+  "truncated": false,
+  "scan_limits_reached": false,
+  "next_scan_recommendations": [
+    "src/qq_music_downloader/node_tools/",
+    "docs/research/ 详细分析",
+    "tests/ 扩展测试覆盖"
+  ],
+  "documentation_status": {
+    "root_claude_md": "已创建",
+    "module_claude_md_count": 4,
+    "mermaid_diagram_generated": true,
+    "navigation_breadcrumbs_added": 4,
+    "coverage_report_generated": true
+  }
+}
