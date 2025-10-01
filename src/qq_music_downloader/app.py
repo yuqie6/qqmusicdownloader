@@ -1,281 +1,445 @@
 #!/usr/bin/env python3
-"""基于 CustomTkinter 的 QQ 音乐下载器应用入口"""
+"""基于 Textual 的 QQ 音乐下载器入口。"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import threading
+import re
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    SelectionList,
+    Select,
+)
 
 from .downloader import QQMusicDownloader
 from .qq_music_api import QQMusicAPI
-from .ui import QQMusicUI
 
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
-class QQMusicApp:
-    """QQ 音乐下载器主应用"""
+QUALITY_OPTIONS = [
+    ("M4A (128kbps)", "1"),
+    ("MP3 (320kbps)", "2"),
+    ("FLAC (无损)", "3"),
+]
+
+
+class QQMusicApp(App[None]):
+    """Textual 终端界面应用。"""
+
+    CSS = """
+    Screen {
+        background: $surface;
+        color: $text;
+    }
+
+    #main {
+        layout: vertical;
+        padding: 1 2;
+    }
+
+    .section {
+        border: solid $secondary;
+        border-title-align: left;
+        padding: 1;
+        margin: 0 0 1 0;
+    }
+
+    .section-title {
+        color: $text;
+        text-style: bold;
+    }
+
+    Label {
+        color: $text;
+    }
+
+    Input {
+        color: $text;
+        border: solid $secondary;
+    }
+
+    Button {
+        color: $text;
+    }
+
+    SelectionList {
+        color: $text;
+    }
+
+    Select {
+        color: $text;
+    }
+
+    #cookie-box,
+    #path-box,
+    #search-box {
+        layout: vertical;
+    }
+
+    #path-line,
+    #search-line,
+    #actions {
+        layout: horizontal;
+    }
+
+    #results {
+        height: 18;
+        min-height: 10;
+    }
+
+    #status-block {
+        layout: vertical;
+    }
+    """
+
+    BINDINGS = [
+        ("ctrl+c", "quit", "退出"),
+        ("ctrl+q", "quit", "退出"),
+    ]
 
     def __init__(self) -> None:
-        self.ui = QQMusicUI()
-        self.ui.set_app(self)
-
+        super().__init__()
         self.api: Optional[QQMusicAPI] = None
         self.downloader: Optional[QQMusicDownloader] = None
-        self.current_songs: List[Dict] = []
+        self.current_songs: List[Dict[str, Any]] = []
         self.is_downloading = False
-
         self._download_path = Path.home() / "Desktop" / "QQMusic"
+        self._unicode_pattern = re.compile(r"\\u[0-9a-fA-F]{4}")
 
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
-        self.thread: Optional[threading.Thread] = None
-        self._loop_ready = threading.Event()
-        self._start_async_loop()
+    def compose(self) -> ComposeResult:
 
-    # ------------------------------------------------------------------
-    # 私有工具方法
-    # ------------------------------------------------------------------
-    def _start_async_loop(self) -> None:
-        """启动后台事件循环线程"""
-
-        def run_loop() -> None:
-            loop = asyncio.new_event_loop()
-            self.loop = loop
-            self._loop_ready.set()
-            asyncio.set_event_loop(loop)
-            loop.run_forever()
-
-        self.thread = threading.Thread(target=run_loop, daemon=True)
-        self.thread.start()
-
-    def _apply_download_path(self, path: Path) -> None:
-        """更新 API 使用的下载路径"""
-
-        self._download_path = Path(path).expanduser()
-        api = self.api
-        if not api:
-            return
-
-        api.base_dir = self._download_path
-        api.music_dir = api.base_dir / "Music"
-        api.lyrics_dir = api.base_dir / "Lyrics"
-
-        for directory in (api.base_dir, api.music_dir, api.lyrics_dir):
-            directory.mkdir(parents=True, exist_ok=True)
-
-        logger.info("下载目录更新为: %s", self._download_path)
-
-    def _notify_ui(self, callback: Callable[[], None]) -> None:
-        """确保 UI 更新在 Tk 线程执行"""
-
-        if hasattr(self.ui, "root") and self.ui.root:
-            self.ui.root.after(0, callback)
-
-    # ------------------------------------------------------------------
-    # 公共接口，供 UI 调用
-    # ------------------------------------------------------------------
-    def update_download_path(self, path: str) -> None:
-        """从 UI 更新下载路径"""
-
-        self._apply_download_path(Path(path))
-        self._notify_ui(
-            lambda: self.ui.set_download_path_label(str(self._download_path))
+        yield Header(show_clock=True)
+        yield Container(
+            Vertical(
+                Container(
+                    Label("认证设置", classes="section-title"),
+                    Container(
+                        Input(
+                            placeholder="粘贴 Cookie 后按回车或点击按钮",
+                            password=False,
+                            id="cookie-input",
+                        ),
+                        Button("保存 Cookie", id="save-cookie"),
+                        id="cookie-box",
+                    ),
+                    classes="section",
+                ),
+                Container(
+                    Label("下载目录", classes="section-title"),
+                    Horizontal(
+                        Input(id="path-input"),
+                        Button("应用路径", id="apply-path"),
+                        id="path-line",
+                    ),
+                    classes="section",
+                ),
+                Container(
+                    Label("搜索歌曲", classes="section-title"),
+                    Horizontal(
+                        Input(
+                            placeholder="输入关键词后按回车或点击按钮",
+                            id="search-input",
+                        ),
+                        Button("搜索", id="search"),
+                        id="search-line",
+                    ),
+                    classes="section",
+                ),
+                Container(
+                    Label("搜索结果", classes="section-title"),
+                    SelectionList[int](id="results"),
+                    Label("已选 0 首", id="selection-label"),
+                    classes="section",
+                ),
+                Container(
+                    Select(QUALITY_OPTIONS, prompt="选择音质", id="quality", value="1"),
+                    Button("开始下载", id="start-download", disabled=True),
+                    Button("暂停/恢复", id="toggle-pause", disabled=True),
+                    id="actions",
+                ),
+                Container(
+                    ProgressBar(id="progress"),
+                    Label("准备就绪", id="status-label"),
+                    id="status-block",
+                    classes="section",
+                ),
+            ),
+            id="main",
         )
+        yield Footer()
 
-    def submit_coroutine(self, coroutine: Coroutine[Any, Any, None]) -> None:
-        """在后台事件循环中调度协程"""
+    async def on_mount(self) -> None:
 
-        self._loop_ready.wait()
-        if not self.loop:
-            raise RuntimeError("事件循环尚未初始化")
-        asyncio.run_coroutine_threadsafe(coroutine, self.loop)
+        path_input = self.query_one("#path-input", Input)
+        path_input.value = str(self._download_path)
+        quality_select = self.query_one("#quality", Select)
+        quality_select.value = "1"
+        self._ensure_download_dirs(self._download_path)
 
-    @property
-    def download_path(self) -> Path:
-        """获取当前下载路径"""
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
 
-        return self._download_path
+        mapping = {
+            "save-cookie": self._save_cookie,
+            "apply-path": self._apply_path,
+            "search": self._search_songs,
+            "start-download": self._start_download,
+            "toggle-pause": self._toggle_pause,
+        }
+        handler = mapping.get(event.button.id or "")
+        if handler is not None:
+            await handler()
 
-    async def save_cookie_async(self, cookie: str) -> None:
-        """保存并验证 Cookie"""
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
 
-        cookie = cookie.strip()
+        if event.input.id == "cookie-input":
+            await self._save_cookie()
+        elif event.input.id == "search-input":
+            await self._search_songs()
+        elif event.input.id == "path-input":
+            await self._apply_path()
+
+    def on_selection_list_selected_changed(
+        self, event: SelectionList.SelectedChanged
+    ) -> None:
+
+        if event.selection_list.id == "results":
+            self._update_selection_label()
+
+    def normalize_text(self, text: str) -> str:
+
+        if not isinstance(text, str):
+            return str(text)
+        if self._unicode_pattern.search(text):
+            try:
+                return text.encode("utf-8").decode("unicode_escape")
+            except UnicodeDecodeError:
+                return text
+        return text
+
+    def set_status(self, message: str) -> None:
+
+        label = self.query_one("#status-label", Label)
+        label.update(self.normalize_text(message))
+
+    def _update_selection_label(self) -> None:
+
+        selection_list = self.query_one("#results", SelectionList[int])
+        selected_count = len(selection_list.selected)
+        label = self.query_one("#selection-label", Label)
+        label.update(f"已选 {selected_count} 首")
+
+    def _set_progress(self, total: int, progress: int) -> None:
+
+        progress_bar = self.query_one("#progress", ProgressBar)
+        progress_bar.update(total=total or None, progress=progress)
+
+    def _ensure_download_dirs(self, path: Path) -> None:
+
+        resolved = path.expanduser()
+        resolved.mkdir(parents=True, exist_ok=True)
+        music_dir = resolved / "Music"
+        lyrics_dir = resolved / "Lyrics"
+        music_dir.mkdir(parents=True, exist_ok=True)
+        lyrics_dir.mkdir(parents=True, exist_ok=True)
+
+        self._download_path = resolved
+        path_input = self.query_one("#path-input", Input)
+        path_input.value = str(resolved)
+
+        api = self.api
+        if api is not None:
+            api.base_dir = resolved
+            api.music_dir = music_dir
+            api.lyrics_dir = lyrics_dir
+            LOGGER.info("下载目录更新为: %s", resolved)
+
+    async def _save_cookie(self) -> None:
+
+        cookie_input = self.query_one("#cookie-input", Input)
+        cookie = cookie_input.value.strip()
         if not cookie:
-            self._notify_ui(lambda: self.ui.set_status("请先输入 Cookie"))
+            self.set_status("请先输入 Cookie")
             return
 
         try:
-            candidate_downloader = QQMusicDownloader(cookie)
-            api = candidate_downloader.api
-
-            self._notify_ui(lambda: self.ui.set_status("正在验证 Cookie..."))
+            downloader = QQMusicDownloader(cookie)
+            api = downloader.api
+            self.set_status("正在验证 Cookie...")
             is_valid = await api.validate_cookie()
-
             if not is_valid:
-                self._notify_ui(
-                    lambda: self.ui.set_status("❌ Cookie 验证失败，请检查")
-                )
+                self.set_status("❌ Cookie 验证失败，请检查")
                 return
 
-            self.downloader = candidate_downloader
+            self.downloader = downloader
             self.api = api
-
-            self._apply_download_path(self._download_path)
-
-            self._notify_ui(lambda: self.ui.set_status("✅ Cookie 验证成功"))
-            self._notify_ui(
-                lambda: self.ui.set_download_path_label(str(self._download_path))
-            )
-
-        except Exception as exc:  # pragma: no cover - UI 环境容错
-            logger.exception("保存 Cookie 失败")
+            self._ensure_download_dirs(self._download_path)
+            self.set_status("✅ Cookie 验证成功")
+            start_button = self.query_one("#start-download", Button)
+            start_button.disabled = False
+        except Exception as exc:  # pragma: no cover - 兜底保护
+            LOGGER.exception("保存 Cookie 失败")
             self.downloader = None
             self.api = None
-            error_message = f"❌ 错误: {exc}"
-            self._notify_ui(lambda msg=error_message: self.ui.set_status(msg))
+            self.set_status(f"❌ 错误: {exc}")
 
-    async def search_songs_async(self, keyword: str) -> None:
-        """搜索歌曲"""
+    async def _apply_path(self) -> None:
 
-        api = self.api
-        if not api:
-            self._notify_ui(lambda: self.ui.set_status("请先配置 Cookie"))
+        path_input = self.query_one("#path-input", Input)
+        candidate = path_input.value.strip()
+        if not candidate:
+            self.set_status("请输入有效的下载目录")
             return
-
-        keyword = keyword.strip()
-        if not keyword:
-            self._notify_ui(lambda: self.ui.set_status("请输入搜索关键词"))
-            return
-
-        self._notify_ui(lambda: self.ui.set_status(f"正在搜索: {keyword}..."))
-
+        candidate_path = Path(candidate)
         try:
-            songs = await api.search_song(keyword)
+            self._ensure_download_dirs(candidate_path)
+            self.set_status(f"下载目录已更新: {candidate_path}")
+        except OSError as exc:
+            LOGGER.exception("创建目录失败")
+            self.set_status(f"❌ 无法创建目录: {exc}")
+
+    async def _search_songs(self) -> None:
+
+        if not self.api:
+            self.set_status("请先配置 Cookie")
+            return
+
+        keyword_input = self.query_one("#search-input", Input)
+        keyword = keyword_input.value.strip()
+        if not keyword:
+            self.set_status("请输入搜索关键词")
+            return
+
+        self.set_status(f"正在搜索: {keyword}...")
+        try:
+            songs = await self.api.search_song(keyword)
         except Exception as exc:  # pragma: no cover - 网络异常
-            logger.exception("搜索失败")
-            error_message = f"搜索失败: {exc}"
-            self._notify_ui(lambda msg=error_message: self.ui.set_status(msg))
+            LOGGER.exception("搜索失败")
+            self.set_status(f"搜索失败: {exc}")
             return
 
         if not songs:
             self.current_songs = []
-            self._notify_ui(lambda: self.ui.update_results([]))
-            self._notify_ui(lambda: self.ui.set_status("未找到相关歌曲"))
+            selection_list = self.query_one("#results", SelectionList[int])
+            selection_list.clear_options()
+            self._update_selection_label()
+            self.set_status("未找到相关歌曲")
             return
 
         self.current_songs = songs[:20]
-        self._notify_ui(lambda: self.ui.update_results(self.current_songs))
-        self._notify_ui(
-            lambda: self.ui.set_status(f"找到 {len(self.current_songs)} 首歌曲")
-        )
+        selection_list = self.query_one("#results", SelectionList[int])
+        selection_list.clear_options()
+        for index, song in enumerate(self.current_songs):
+            name = self.normalize_text(song.get("name", "未知歌曲"))
+            singer = self.normalize_text(song.get("singer", "未知歌手"))
+            album = self.normalize_text(song.get("album", "未知专辑"))
+            label = f"{index + 1}. {name} - {singer} ({album})"
+            selection_list.add_option((label, index))
+        selection_list.refresh()
+        self._update_selection_label()
+        self.set_status(f"找到 {len(self.current_songs)} 首歌曲")
 
-    async def start_download_async(self, indices: List[int], quality: int) -> None:
-        """开始下载选中的歌曲"""
+    async def _start_download(self) -> None:
 
         if self.is_downloading:
-            self._notify_ui(lambda: self.ui.set_status("已有下载任务进行中"))
-            return
-
-        if not indices:
-            self._notify_ui(lambda: self.ui.set_status("请先选择要下载的歌曲"))
+            self.set_status("已有下载任务进行中")
             return
 
         if not self.api:
-            self._notify_ui(lambda: self.ui.set_status("请先配置 Cookie"))
+            self.set_status("请先配置 Cookie")
             return
 
-        self.is_downloading = True
-        self._notify_ui(lambda: self.ui.enable_download_controls(False))
+        selection_list = self.query_one("#results", SelectionList[int])
+        indices = sorted(set(selection_list.selected))
+        if not indices:
+            self.set_status("请先选择要下载的歌曲")
+            return
 
-        indices = sorted(set(indices))
+        quality_select = self.query_one("#quality", Select)
+        try:
+            quality = int(quality_select.value or "1")
+        except ValueError:
+            quality = 1
+
+        self.is_downloading = True
+        start_button = self.query_one("#start-download", Button)
+        start_button.disabled = True
+        pause_button = self.query_one("#toggle-pause", Button)
+        pause_button.disabled = False
+
         total = len(indices)
+        self._set_progress(total, 0)
 
         try:
             for position, idx in enumerate(indices, start=1):
-                try:
-                    song = self.current_songs[idx]
-                except IndexError:
-                    logger.warning("歌曲索引越界: %s", idx)
+                if idx >= len(self.current_songs):
+                    LOGGER.warning("歌曲索引越界: %s", idx)
                     continue
-
-                def _status_update(song_name: str, singer: str, pos: int) -> None:
-                    self.ui.set_status(
-                        f"下载中 ({pos}/{total}): {song_name} - {singer}"
-                    )
-
-                self._notify_ui(
-                    lambda s=song, p=position: _status_update(s["name"], s["singer"], p)
-                )
-                self._notify_ui(
-                    lambda p=position: self.ui.set_progress((p - 1) / total)
-                )
-
+                song = self.current_songs[idx]
+                song_name = self.normalize_text(song.get("name", "未知歌曲"))
+                singer = self.normalize_text(song.get("singer", "未知歌手"))
+                self.set_status(f"下载中 ({position}/{total}): {song_name} - {singer}")
                 success = await self._download_song(song, quality)
-
                 if not success:
-                    self._notify_ui(
-                        lambda s=song: self.ui.set_status(
-                            f"❌ 下载失败: {s['name']} - {s['singer']}"
-                        )
-                    )
+                    self.set_status(f"❌ 下载失败: {song_name} - {singer}")
                     break
-
-                self._notify_ui(lambda p=position: self.ui.set_progress(p / total))
-
+                self._set_progress(total, position)
             else:
-                self._notify_ui(
-                    lambda: self.ui.set_status(f"✅ 已完成 {total} 首歌曲下载")
-                )
-                self._notify_ui(lambda: self.ui.set_progress(1.0))
-
-        except Exception as exc:  # pragma: no cover - 兜底异常
-            logger.exception("下载任务失败")
-            error_message = f"❌ 下载失败: {exc}"
-            self._notify_ui(lambda msg=error_message: self.ui.set_status(msg))
-
+                self.set_status(f"✅ 已完成 {total} 首歌曲下载")
+        except Exception as exc:  # pragma: no cover - 极端异常
+            LOGGER.exception("下载任务失败")
+            self.set_status(f"❌ 下载失败: {exc}")
         finally:
             self.is_downloading = False
-            self._notify_ui(lambda: self.ui.enable_download_controls(True))
+            pause_button.disabled = True
+            start_button.disabled = False
             await asyncio.sleep(1)
-            self._notify_ui(lambda: self.ui.set_progress(0.0))
+            self._set_progress(0, 0)
 
-    async def _download_song(self, song: Dict, quality: int) -> bool:
-        """下载单首歌曲"""
+    async def _download_song(self, song: Dict[str, Any], quality: int) -> bool:
 
         api = self.api
-        if not api:
+        if api is None:
             return False
 
         songmid = song.get("songmid") or song.get("id")
         media_mid = song.get("media_mid") or songmid
-
         if not songmid:
-            logger.error("歌曲信息缺少 songmid: %s", song)
+            LOGGER.error("歌曲缺少 songmid: %s", song)
             return False
 
         try:
             download_url = await api.get_song_url(songmid, media_mid, quality)
-        except Exception:
-            logger.exception("获取下载链接失败")
+        except Exception:  # pragma: no cover - 外部依赖
+            LOGGER.exception("获取下载链接失败")
             return False
 
         if not download_url:
-            logger.error("未能获取下载链接: %s", songmid)
+            LOGGER.error("未获取到下载链接: %s", songmid)
             return False
 
-        filename = f"{song['name']} - {song['singer']}"
+        filename = f"{song.get('name', '未知歌曲')} - {song.get('singer', '未知歌手')}"
 
         pause_events = None
-        if self.downloader and getattr(self.downloader, "global_pause_event", None):
-            pause_events = [self.downloader.global_pause_event]
+        downloader = self.downloader
+        if downloader and getattr(downloader, "global_pause_event", None):
+            pause_events = [downloader.global_pause_event]
 
         try:
             return await api.download_with_lyrics(
@@ -285,36 +449,35 @@ class QQMusicApp:
                 songmid,
                 pause_events=pause_events,
             )
-        except Exception:
-            logger.exception("下载失败: %s", filename)
+        except Exception:  # pragma: no cover - 外部依赖
+            LOGGER.exception("下载失败: %s", filename)
             return False
 
-    def toggle_pause(self) -> None:
-        """切换暂停状态"""
+    async def _toggle_pause(self) -> None:
 
-        if not self.downloader or not hasattr(self.downloader, "global_pause_event"):
+        downloader = self.downloader
+        if not downloader or not hasattr(downloader, "global_pause_event"):
             return
 
-        pause_event = self.downloader.global_pause_event
+        pause_event = downloader.global_pause_event
         if pause_event.is_set():
             pause_event.clear()
-            self._notify_ui(lambda: self.ui.set_status("⏸ 已暂停"))
+            self.set_status("⏸ 已暂停")
         else:
             pause_event.set()
-            self._notify_ui(lambda: self.ui.set_status("▶ 已恢复"))
+            self.set_status("▶ 已恢复")
 
-    def run(self) -> None:
-        """运行应用"""
+    def action_quit(self) -> None:
 
-        try:
-            self.ui.run()
-        finally:
-            if self.loop:
-                self.loop.call_soon_threadsafe(self.loop.stop)
+        self.exit()
 
 
 def main() -> QQMusicApp:
-    """应用入口"""
+    """应用入口。
+
+    Returns:
+        QQMusicApp: Textual 应用实例。
+    """
 
     app = QQMusicApp()
     app.run()

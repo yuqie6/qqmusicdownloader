@@ -7,28 +7,13 @@ requires-python = ">=3.11"
 dependencies = [
     "aiofiles>=24.1.0",
     "aiohttp>=3.12.15",
-    "customtkinter>=5.2.2",
-    "pillow>=11.3.0",
+    "textual>=0.58.1",
     "pytest>=8.4.2",
     "ruff>=0.13.1",
 ]
 
-[tool.briefcase]
-project_name = "QQ Music Downloader"
-bundle = "com.yuqie"
-author = "yuqie6"
-version = "1.2.0"
+[project.scripts]
+qqmusicdownloader = "qq_music_downloader.app:main"
 
-[tool.briefcase.app.qq_music_downloader]
-formal_name = "极简音乐下载器"
-description = "一款可以下载QQ音乐里面的歌曲的软件"
-license = { file = "LICENSE" }
-module = "qq_music_downloader"
-sources = ["src/qq_music_downloader"]
-requires = [
-    "aiofiles>=24.1.0",
-    "aiohttp>=3.12.15",
-    "customtkinter>=5.2.2",
-    "pillow>=11.3.0",
-]
-icon = "src/qq_music_downloader/resources/app-icon"
+[tool.uv]
+package = true

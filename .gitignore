@@ -70,11 +70,19 @@ cURL
 # Python tooling caches
 .ruff_cache/
 .pytest_cache/
-uv.lock
+.mypy_cache/
+.tox/
+.coverage
+htmlcov/
+.pytest_cache/
+.cache/
+
+# uv and pip caches
+.uv/
+.pip-cache/
 
 # 敏感信息和配置文件
 *.cookie
-*.txt
 config/
 secrets/
 .env
@@ -90,6 +98,19 @@ docs/research/
 *.bin
 *response*
 
-docs
-AGENTS.md
-CLAUDE.md
+# 工作流和临时目录
+.spec-workflow/
+.tmp/
+temp/
+tmp/
+
+# 编辑器和IDE特定文件
+.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# 系统文件
+Thumbs.db
+.DS_Store
+*.log
