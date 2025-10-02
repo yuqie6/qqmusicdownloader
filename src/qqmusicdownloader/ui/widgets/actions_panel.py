@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, cast
 
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.message import Message
 from textual.widgets import Button, Select
+from textual._select import NoSelection
 
 
 class ActionsPanel(Container):
@@ -14,14 +15,8 @@ class ActionsPanel(Container):
     class StartRequested(Message):
         """请求开始下载。"""
 
-        def __init__(self, sender: ActionsPanel) -> None:
-            super().__init__(sender)
-
     class TogglePauseRequested(Message):
         """请求切换暂停状态。"""
-
-        def __init__(self, sender: ActionsPanel) -> None:
-            super().__init__(sender)
 
     def __init__(self, quality_options: Sequence[tuple[str, str]], default: str = "1") -> None:
         super().__init__(id="actions")
@@ -37,8 +32,11 @@ class ActionsPanel(Container):
     def get_quality(self) -> int:
         """返回当前选择的音质编号。"""
 
+        value = self._quality.value
+        if isinstance(value, NoSelection) or value is None:
+            return 1
         try:
-            return int(self._quality.value or "1")
+            return int(str(value))
         except (TypeError, ValueError):
             return 1
 
@@ -53,7 +51,7 @@ class ActionsPanel(Container):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button is self._start:
-            self.post_message(self.StartRequested(self))
+            self.post_message(self.StartRequested())
         elif event.button is self._toggle:
-            self.post_message(self.TogglePauseRequested(self))
+            self.post_message(self.TogglePauseRequested())
 
