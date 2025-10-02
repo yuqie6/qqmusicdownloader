@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Sequence, cast
+from typing import Sequence
 
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.message import Message
 from textual.widgets import Button, Select
-from textual._select import NoSelection
 
 
 class ActionsPanel(Container):
@@ -33,7 +32,9 @@ class ActionsPanel(Container):
         """返回当前选择的音质编号。"""
 
         value = self._quality.value
-        if isinstance(value, NoSelection) or value is None:
+        # 检查值是否为空或未选择
+        if value is None or (hasattr(value, '__class__') and
+                           value.__class__.__name__ in ('NoSelection', '_NoSelection')):
             return 1
         try:
             return int(str(value))
