@@ -12,8 +12,8 @@ class CookiePanel(Container):
     class SaveRequested(Message):
         """请求保存 Cookie。"""
 
-        def __init__(self, sender: CookiePanel, cookie: str) -> None:
-            super().__init__(sender)
+        def __init__(self, cookie: str) -> None:
+            super().__init__()
             self.cookie = cookie
 
     def __init__(self) -> None:
@@ -44,5 +44,4 @@ class CookiePanel(Container):
 
     def _emit_save_request(self) -> None:
         cookie = self._input.value.strip()
-        self.post_message(self.SaveRequested(self, cookie))
-
+        self.post_message(self.SaveRequested(cookie))

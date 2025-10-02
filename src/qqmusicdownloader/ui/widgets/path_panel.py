@@ -12,8 +12,8 @@ class PathPanel(Container):
     class ApplyRequested(Message):
         """请求应用新的下载路径。"""
 
-        def __init__(self, sender: PathPanel, path: str) -> None:
-            super().__init__(sender)
+        def __init__(self, path: str) -> None:
+            super().__init__()
             self.path = path
 
     def __init__(self) -> None:
@@ -44,5 +44,4 @@ class PathPanel(Container):
             self._emit_apply_request()
 
     def _emit_apply_request(self) -> None:
-        self.post_message(self.ApplyRequested(self, self.get_candidate_path()))
-
+        self.post_message(self.ApplyRequested(self.get_candidate_path()))

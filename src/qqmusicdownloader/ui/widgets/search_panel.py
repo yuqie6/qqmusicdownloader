@@ -12,8 +12,8 @@ class SearchPanel(Container):
     class SearchRequested(Message):
         """请求执行搜索。"""
 
-        def __init__(self, sender: SearchPanel, keyword: str) -> None:
-            super().__init__(sender)
+        def __init__(self, keyword: str) -> None:
+            super().__init__()
             self.keyword = keyword
 
     def __init__(self) -> None:
@@ -47,5 +47,4 @@ class SearchPanel(Container):
             self._emit_search_request()
 
     def _emit_search_request(self) -> None:
-        self.post_message(self.SearchRequested(self, self.get_keyword()))
-
+        self.post_message(self.SearchRequested(self.get_keyword()))
