@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from textual.widgets import Button, Input, Label, SelectionList
-
 from qqmusicdownloader.services import DownloadService
 from qqmusicdownloader.ui.app import QQMusicApp
 
@@ -65,34 +63,27 @@ class FakeDownloadService:
 async def test_app_flow_save_search_and_download(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_service = FakeDownloadService(tmp_path)
 
-    async def run_app_test() -> None:
-        async with QQMusicApp().run_test() as pilot:
-            cookie_input = pilot.app.query_one("#cookie-input", Input)
-            cookie_input.value = "test_cookie"
-
-            await pilot.app._save_cookie()
-
-            start_button = pilot.app.query_one("#start-download", Button)
-            assert start_button.disabled is False
-            assert fake_service.validate_called is True
-
-            search_input = pilot.app.query_one("#search-input", Input)
-            search_input.value = "爱错"
-            await pilot.app._search_songs()
-
-            selection = pilot.app.query_one("#results", SelectionList)
-            assert len(selection.options) == 2
-            selection.select(0)
-
-            await pilot.app._start_download()
-
-            status = pilot.app.query_one("#status-label", Label)
-            assert "完成" in str(status.renderable)
-            assert fake_service.download_calls == [("mid123", 1)]
-
     def fake_from_cookie(cls, cookie: str) -> FakeDownloadService:  # noqa: D401
         return fake_service
 
     monkeypatch.setattr(DownloadService, "from_cookie", classmethod(fake_from_cookie))
 
-    await run_app_test()
+    async with QQMusicApp().run_test() as pilot:
+        await pilot.app._save_cookie("test_cookie")
+
+        assert fake_service.validate_called is True
+        assert fake_service.set_path_calls  # 路径被同步至服务层
+        assert pilot.app.actions_panel._start.disabled is False
+
+        await pilot.app._search_songs("爱错")
+        assert fake_service.search_calls == ["爱错"]
+        assert len(pilot.app.current_songs) == 2
+        # 选中第一首歌曲
+        results_selection = pilot.app.results_panel._selection
+        results_selection.select(0)
+
+        await pilot.app._start_download()
+        assert fake_service.download_calls == [("mid123", 1)]
+
+        status_content = pilot.app.status_panel._label.render()
+        assert "完成" in status_content.plain
